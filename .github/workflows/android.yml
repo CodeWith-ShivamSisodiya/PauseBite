@@ -143,8 +143,8 @@ jobs:
           ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
           test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
           echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
-      - name: Build three incremental isolation APKs
-        run: gradle --no-daemon :isolation:assembleUiOnlyRelease :isolation:assembleUiPermissionsRelease :isolation:assembleFullRelease
+      - name: Build isolation and five single-permission APKs
+        run: gradle --no-daemon :isolation:assembleUiOnlyRelease :isolation:assembleUiPermissionsRelease :isolation:assembleFullRelease :isolation:assembleOnlyOverlayRelease :isolation:assembleOnlyUsageRelease :isolation:assembleOnlyForegroundRelease :isolation:assembleOnlySpecialUseRelease :isolation:assembleOnlyNotificationsRelease
       - name: Verify and sign isolation APKs with one independent test certificate
         shell: bash
         run: |
@@ -157,11 +157,16 @@ jobs:
           echo "::add-mask::$TEST_PASS"
           keytool -genkeypair -noprompt -alias isolation -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Isolation Test, O=Local Diagnostic, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
           mkdir -p isolation-apks
-          for variant in uiOnly uiPermissions full; do
+          for variant in uiOnly uiPermissions full onlyOverlay onlyUsage onlyForeground onlySpecialUse onlyNotifications; do
             case "$variant" in
               uiOnly) slug=ui-only; pkg=com.pausebite.isolation.uionly; expected=0 ;;
               uiPermissions) slug=ui-permissions; pkg=com.pausebite.isolation.uipermissions; expected=5 ;;
               full) slug=full; pkg=com.pausebite.isolation.full; expected=5 ;;
+              onlyOverlay) slug=overlay; pkg=com.pausebite.isolation.onlyoverlay; expected=1 ;;
+              onlyUsage) slug=usage; pkg=com.pausebite.isolation.onlyusage; expected=1 ;;
+              onlyForeground) slug=foreground; pkg=com.pausebite.isolation.onlyforeground; expected=1 ;;
+              onlySpecialUse) slug=special-use; pkg=com.pausebite.isolation.onlyspecialuse; expected=1 ;;
+              onlyNotifications) slug=notifications; pkg=com.pausebite.isolation.onlynotifications; expected=1 ;;
             esac
             src="$(find "isolation/build/outputs/apk/$variant/release" -maxdepth 1 -name "*.apk" -type f | head -n 1)"
             if [ -z "$src" ] || [ ! -f "$src" ]; then echo "::error::Missing APK for $variant"; find isolation/build/outputs/apk -type f; exit 1; fi
@@ -174,24 +179,32 @@ jobs:
             if ! grep -Fq "package: name='$pkg' versionCode='1'" "isolation-apks/$slug-metadata.txt"; then echo "::error::$slug APK identity mismatch"; head -n 2 "isolation-apks/$slug-metadata.txt"; exit 1; fi
             count="$(grep -c "^uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
             echo "$slug verified permission count: $count"
+            case "$variant" in
+              onlyOverlay) grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
+              onlyUsage) grep -Fq "name='android.permission.PACKAGE_USAGE_STATS'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
+              onlyForeground) grep -Fq "name='android.permission.FOREGROUND_SERVICE'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
+              onlySpecialUse) grep -Fq "name='android.permission.FOREGROUND_SERVICE_SPECIAL_USE'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
+              onlyNotifications) grep -Fq "name='android.permission.POST_NOTIFICATIONS'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
+            esac
             test "$count" -eq "$expected" || { echo "::error::$slug permissions: expected $expected, got $count"; exit 1; }
             cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "isolation-apks/$slug-signature.txt" | head -n 1)"
             if [ -z "$cert" ]; then echo "::error::$slug certificate parsing failed"; cat "isolation-apks/$slug-signature.txt"; exit 1; fi
             if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else if [ "$reference_cert" != "$cert" ]; then echo "::error::$slug certificate mismatch"; exit 1; fi; fi
           done
           cat > isolation-apks/README.txt <<'EOF'
-          TEST ONLY. Three APKs use one temporary certificate and distinct package names.
+          TEST ONLY. Eight APKs use one temporary certificate and distinct package names.
           All compile the SAME PauseBite UI, MonitorService, and Overlay source.
           ui-only: no permissions, no service registration.
           ui-permissions: five permissions, no service registration.
           full: five permissions plus registered foreground service.
+          overlay, usage, foreground, special-use, notifications: each declares exactly one named permission, no service registration.
           The main PauseBite app is unchanged. Do not grant permissions or start monitoring in the diagnostic variants.
           Keep Play Protect enabled. Install one at a time and record the warning.
           The temporary signing key is not retained; these are not updatable production apps.
           EOF
       - uses: actions/upload-artifact@v4
         with:
-          name: PauseBite-three-stage-isolation-tests
+          name: PauseBite-permission-isolation-tests
           path: isolation-apks/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4

@@ -21,6 +21,11 @@ android {
   create("uiOnly") { dimension = "capability"; applicationId = "com.pausebite.isolation.uionly" }
   create("uiPermissions") { dimension = "capability"; applicationId = "com.pausebite.isolation.uipermissions" }
   create("full") { dimension = "capability"; applicationId = "com.pausebite.isolation.full" }
+  create("onlyOverlay") { dimension = "capability"; applicationId = "com.pausebite.isolation.onlyoverlay" }
+  create("onlyUsage") { dimension = "capability"; applicationId = "com.pausebite.isolation.onlyusage" }
+  create("onlyForeground") { dimension = "capability"; applicationId = "com.pausebite.isolation.onlyforeground" }
+  create("onlySpecialUse") { dimension = "capability"; applicationId = "com.pausebite.isolation.onlyspecialuse" }
+  create("onlyNotifications") { dimension = "capability"; applicationId = "com.pausebite.isolation.onlynotifications" }
  }
  sourceSets.getByName("main").java.srcDir("../app/src/main/java")
  signingConfigs {
