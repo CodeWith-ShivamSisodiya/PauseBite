@@ -36,7 +36,7 @@ class MainActivity : Activity() {
             textSize = 24f
         })
         root.addView(TextView(this).apply {
-            text = "PauseBite works offline. Usage Access is used locally to notice when Swiggy or Zomato opens. It then posts a dismissible mindful-eating reminder notification. No app-usage data is uploaded or shared. Monitoring starts only when you tap START and stops when you tap STOP."
+            text = "PauseBite works offline. Usage Access is used locally to notice when Swiggy or Zomato opens. Display-over-other-apps access shows one clearly branded, dismissible pause card over the food app. No app-usage data is uploaded or shared. Monitoring starts only when you tap START and stops when you tap STOP."
             textSize = 15f
         })
 
@@ -54,7 +54,8 @@ class MainActivity : Activity() {
         }
 
         button("1. Grant Usage Access") { showUsageDisclosure() }
-        button("2. Allow reminder notifications") {
+        button("2. Allow PauseBite overlay") { showOverlayDisclosure() }
+        button("3. Allow monitoring notification") {
             if (Build.VERSION.SDK_INT >= 33) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST)
             } else {
@@ -64,7 +65,8 @@ class MainActivity : Activity() {
         button("START monitoring") {
             when {
                 !usageAllowed() -> toast("Grant Usage Access first")
-                !notificationsAllowed() -> toast("Allow notifications so PauseBite can show reminders")
+                !overlayAllowed() -> toast("Allow PauseBite to display over other apps")
+                !notificationsAllowed() -> toast("Allow the monitoring notification first")
                 else -> {
                     try {
                         startForegroundService(Intent(this, MonitorService::class.java))
@@ -79,12 +81,14 @@ class MainActivity : Activity() {
             stopService(Intent(this, MonitorService::class.java))
             refresh()
         }
-        button("Test reminder notification") {
-            if (!notificationsAllowed()) {
-                toast("Allow notifications first")
+        button("Test Pause Card overlay") {
+            if (!overlayAllowed()) {
+                toast("Allow the PauseBite overlay first")
+            } else if (!notificationsAllowed()) {
+                toast("Allow the monitoring notification first")
             } else {
                 startForegroundService(
-                    Intent(this, MonitorService::class.java).setAction(MonitorService.ACTION_TEST_REMINDER)
+                    Intent(this, MonitorService::class.java).setAction(MonitorService.ACTION_TEST_OVERLAY)
                 )
             }
         }
@@ -121,7 +125,7 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        status.text = "Usage Access: ${usageAllowed()} | Notifications: ${notificationsAllowed()} | Monitoring: ${prefs.getBoolean("monitoring", false)}"
+        status.text = "Usage Access: ${usageAllowed()} | Overlay: ${overlayAllowed()} | Notification: ${notificationsAllowed()} | Monitoring: ${prefs.getBoolean("monitoring", false)}"
         if (::diagnostics.isInitialized) {
             val packageInfo = packageManager.getPackageInfo(packageName, 0)
             val versionCode = if (Build.VERSION.SDK_INT >= 28) {
@@ -131,7 +135,7 @@ class MainActivity : Activity() {
                 packageInfo.versionCode.toLong()
             }
             diagnostics.text = "Detected openings: ${prefs.getInt("detected_count", 0)}\n" +
-                "Reminders shown: ${prefs.getInt("reminder_count", 0)}\n" +
+                "Pause Cards shown: ${prefs.getInt("overlay_count", 0)}\n" +
                 "Last detected: ${prefs.getString("last_detected", "None")}\n" +
                 "Event delay: ${prefs.getLong("delay_ms", -1L)} ms\n" +
                 "Last result: ${prefs.getString("last_reason", "None")}\n" +
@@ -164,6 +168,26 @@ class MainActivity : Activity() {
             }
             .show()
     }
+
+    private fun showOverlayDisclosure() {
+        AlertDialog.Builder(this)
+            .setTitle("How the Pause Card works")
+            .setMessage(
+                "When monitoring is on and you open a selected food-delivery app, PauseBite uses Android's Display over other apps access to place one clearly branded pause card above that app. The card does not read, capture, or modify the food app's screen. It can be closed immediately, disabled for the day, or disabled permanently by stopping monitoring or revoking this access."
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Open settings") { _, _ ->
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+            .show()
+    }
+
+    private fun overlayAllowed(): Boolean = Settings.canDrawOverlays(this)
 
     private fun notificationsAllowed(): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

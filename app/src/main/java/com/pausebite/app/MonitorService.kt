@@ -19,7 +19,10 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
+import java.time.LocalDate
+import java.time.ZoneId
 
 class MonitorService : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -29,6 +32,7 @@ class MonitorService : Service() {
     )
     private lateinit var powerManager: PowerManager
     private lateinit var notificationManager: NotificationManager
+    private lateinit var overlayController: OverlayController
     private var lastForeground = ""
     private var lastEventAt = System.currentTimeMillis()
     private var lastEventKey = ""
@@ -44,7 +48,7 @@ class MonitorService : Service() {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     handler.removeCallbacks(tick)
-                    notificationManager.cancel(REMINDER_NOTIFICATION_ID)
+                    overlayController.dismiss()
                     saveState("Paused: screen off", 0L)
                 }
                 Intent.ACTION_SCREEN_ON -> {
@@ -90,6 +94,23 @@ class MonitorService : Service() {
         super.onCreate()
         powerManager = getSystemService(POWER_SERVICE) as PowerManager
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        overlayController = OverlayController(this) { action ->
+            when (action) {
+                OverlayController.Action.CONTINUE -> {
+                    preferences().edit().putString("last_reason", "Pause Card closed; ordering continued").apply()
+                }
+                OverlayController.Action.DISMISS_TODAY -> {
+                    val tomorrow = LocalDate.now().plusDays(1)
+                        .atStartOfDay(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+                    preferences().edit()
+                        .putLong("snooze_until", tomorrow)
+                        .putString("last_reason", "Pause Cards dismissed until tomorrow")
+                        .apply()
+                }
+            }
+        }
         createNotificationChannels()
         lastEventAt = System.currentTimeMillis() - 3_000L
         readBattery(true)
@@ -116,21 +137,6 @@ class MonitorService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            ACTION_SNOOZE -> {
-                preferences().edit()
-                    .putLong("snooze_until", System.currentTimeMillis() + SNOOZE_MILLIS)
-                    .putString("last_reason", "Snoozed for 30 minutes")
-                    .apply()
-                notificationManager.cancel(REMINDER_NOTIFICATION_ID)
-                if (!monitoringStarted) stopSelf()
-                return START_NOT_STICKY
-            }
-            ACTION_DISMISS -> {
-                notificationManager.cancel(REMINDER_NOTIFICATION_ID)
-                preferences().edit().putString("last_reason", "Reminder dismissed").apply()
-                if (!monitoringStarted) stopSelf()
-                return START_NOT_STICKY
-            }
         }
 
         if (!monitoringStarted) {
@@ -144,32 +150,22 @@ class MonitorService : Service() {
             if (powerManager.isInteractive) handler.post(tick) else saveState("Paused: screen off", 0L)
         }
 
-        if (intent?.action == ACTION_TEST_REMINDER) {
-            showReminder("Test")
+        if (intent?.action == ACTION_TEST_OVERLAY) {
+            showPauseCard("Test food app")
         }
         return START_NOT_STICKY
     }
 
     private fun createNotificationChannels() {
-        notificationManager.createNotificationChannels(
-            listOf(
-                NotificationChannel(
-                    MONITOR_CHANNEL_ID,
-                    "Monitoring status",
-                    NotificationManager.IMPORTANCE_LOW
-                ).apply {
-                    description = "Shows when user-started PauseBite monitoring is active"
-                    setShowBadge(false)
-                },
-                NotificationChannel(
-                    REMINDER_CHANNEL_ID,
-                    "Mindful eating reminders",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Optional reminder shown when a supported food app opens"
-                    enableVibration(true)
-                }
-            )
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                MONITOR_CHANNEL_ID,
+                "Monitoring status",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows when user-started PauseBite monitoring is active"
+                setShowBadge(false)
+            }
         )
     }
 
@@ -202,37 +198,9 @@ class MonitorService : Service() {
         }
     }
 
-    private fun showReminder(source: String): Boolean {
-        val openApp = PendingIntent.getActivity(
-            this,
-            3,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val reminder = Notification.Builder(this, REMINDER_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Pause before ordering?")
-            .setContentText("$source opened. Hungry, or just craving? Take five seconds to decide.")
-            .setStyle(
-                Notification.BigTextStyle().bigText(
-                    "$source opened. Hungry, or just craving? Take five seconds to decide. You can still order."
-                )
-            )
-            .setContentIntent(openApp)
-            .setAutoCancel(true)
-            .setTimeoutAfter(20_000L)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .addAction(Notification.Action.Builder(null, "Dismiss", servicePendingIntent(4, ACTION_DISMISS)).build())
-            .addAction(Notification.Action.Builder(null, "Snooze 30 min", servicePendingIntent(5, ACTION_SNOOZE)).build())
-            .build()
-        return try {
-            notificationManager.notify(REMINDER_NOTIFICATION_ID, reminder)
-            true
-        } catch (error: SecurityException) {
-            Log.w(LOG_TAG, "Reminder notification permission unavailable")
-            false
-        }
+    private fun showPauseCard(source: String): Boolean {
+        if (!Settings.canDrawOverlays(this)) return false
+        return overlayController.show(source)
     }
 
     private fun servicePendingIntent(requestCode: Int, action: String): PendingIntent =
@@ -277,12 +245,12 @@ class MonitorService : Service() {
 
         val prefs = preferences()
         val snoozeUntil = prefs.getLong("snooze_until", 0L)
-        val previousReminder = prefs.getLong("last_reminder_at", 0L)
+        val previousOverlay = prefs.getLong("last_overlay_at", 0L)
         val cooldown = prefs.getLong("cooldown_ms", 1_800_000L)
         val reason = when {
-            now < snoozeUntil -> "Snoozed"
-            now - previousReminder < cooldown -> "Cooldown (${(cooldown - (now - previousReminder)).coerceAtLeast(0L) / 1000}s left)"
-            else -> "Reminder requested"
+            now < snoozeUntil -> "Pause Cards dismissed until tomorrow"
+            now - previousOverlay < cooldown -> "Cooldown (${(cooldown - (now - previousOverlay)).coerceAtLeast(0L) / 1000}s left)"
+            else -> "Pause Card requested"
         }
 
         prefs.edit()
@@ -292,15 +260,15 @@ class MonitorService : Service() {
             .putString("last_reason", reason)
             .apply()
 
-        if (reason == "Reminder requested") {
-            if (showReminder(targetName)) {
+        if (reason == "Pause Card requested") {
+            if (showPauseCard(targetName)) {
                 prefs.edit()
-                    .putLong("last_reminder_at", now)
-                    .putInt("reminder_count", prefs.getInt("reminder_count", 0) + 1)
-                    .putString("last_reason", "Reminder shown")
+                    .putLong("last_overlay_at", now)
+                    .putInt("overlay_count", prefs.getInt("overlay_count", 0) + 1)
+                    .putString("last_reason", "Pause Card shown")
                     .apply()
             } else {
-                prefs.edit().putString("last_reason", "Notification permission unavailable").apply()
+                prefs.edit().putString("last_reason", "Overlay permission unavailable").apply()
             }
         }
     }
@@ -338,11 +306,11 @@ class MonitorService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        overlayController.dismiss()
         if (receiverRegistered) {
             unregisterReceiver(screenReceiver)
             receiverRegistered = false
         }
-        notificationManager.cancel(REMINDER_NOTIFICATION_ID)
         saveState("Monitoring stopped", 0L)
         preferences().edit()
             .putBoolean("monitoring", false)
@@ -354,16 +322,11 @@ class MonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        const val ACTION_TEST_REMINDER = "com.pausebite.app.action.TEST_REMINDER"
+        const val ACTION_TEST_OVERLAY = "com.pausebite.app.action.TEST_OVERLAY"
         private const val ACTION_STOP = "com.pausebite.app.action.STOP"
-        private const val ACTION_SNOOZE = "com.pausebite.app.action.SNOOZE"
-        private const val ACTION_DISMISS = "com.pausebite.app.action.DISMISS"
         private const val PREFS = "pausebite"
         private const val LOG_TAG = "PauseBite"
         private const val MONITOR_CHANNEL_ID = "monitoring_status_v1"
-        private const val REMINDER_CHANNEL_ID = "mindful_reminders_v1"
         private const val MONITOR_NOTIFICATION_ID = 42
-        private const val REMINDER_NOTIFICATION_ID = 43
-        private const val SNOOZE_MILLIS = 30 * 60 * 1000L
     }
 }

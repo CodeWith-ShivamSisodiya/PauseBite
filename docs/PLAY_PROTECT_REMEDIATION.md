@@ -1,5 +1,7 @@
 # Play Protect remediation
 
+> Historical note: version 1.1 reintroduces a minimal, explicitly disclosed overlay as a controlled experiment using the stable `com.pausebite.app` identity and persistent release signing. The removal described below documents the version 1.0 remediation baseline; it is no longer the current manifest state.
+
 ## What is verified
 
 - The screenshot says **Harmful app blocked**. Google's documentation defines this as a Potentially Harmful Application (PHA) or mobile unwanted software verdict. It is not the ordinary unknown-app scan prompt and not the separate sensitive-permission sideload block.

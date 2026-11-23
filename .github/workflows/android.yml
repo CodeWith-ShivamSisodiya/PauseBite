@@ -99,10 +99,11 @@ jobs:
             android.permission.PACKAGE_USAGE_STATS \
             android.permission.FOREGROUND_SERVICE \
             android.permission.FOREGROUND_SERVICE_SPECIAL_USE \
-            android.permission.POST_NOTIFICATIONS; do
+            android.permission.POST_NOTIFICATIONS \
+            android.permission.SYSTEM_ALERT_WINDOW; do
             grep -Fq "name='$permission'" apk-permissions.txt
           done
-          if grep -Eq 'android.permission.(SYSTEM_ALERT_WINDOW|INTERNET|QUERY_ALL_PACKAGES|BIND_ACCESSIBILITY_SERVICE|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION)' apk-permissions.txt; then
+          if grep -Eq 'android.permission.(INTERNET|QUERY_ALL_PACKAGES|BIND_ACCESSIBILITY_SERVICE|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION)' apk-permissions.txt; then
             echo "::error::Unexpected high-risk permission in release APK"
             exit 1
           fi
