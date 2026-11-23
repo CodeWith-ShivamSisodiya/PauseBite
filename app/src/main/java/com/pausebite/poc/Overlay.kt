@@ -35,7 +35,10 @@ object Overlay {
   } })
   val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT).apply { gravity = Gravity.BOTTOM }
   return try { wm.addView(panel, params); view = panel; manager = wm; true }
-  catch (_: Exception) { view = null; manager = null; false }
+  catch (e: Exception) {
+   android.util.Log.w("PauseBite", "Overlay could not be displayed: ${e.javaClass.simpleName}")
+   view = null; manager = null; false
+  }
  }
  fun hide() {
   val v = view; val wm = manager

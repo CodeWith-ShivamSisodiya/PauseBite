@@ -22,6 +22,7 @@ class MonitorService : Service() {
  private var pollCount = 0L
  private var startedAt = 0L
  private var receiverRegistered = false
+ private var monitoringStarted = false
  private var batteryLevel = -1
  private var lowBattery = false
  private var lastBatteryRead = 0L
@@ -83,10 +84,6 @@ class MonitorService : Service() {
   if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
   else registerReceiver(screenReceiver, filter)
   receiverRegistered = true
-  getSharedPreferences("poc", MODE_PRIVATE).edit().putBoolean("monitoring", true)
-   .putLong("monitor_started_at", startedAt).putString("last_reason", "Monitoring started").apply()
-  startNotification()
-  if (power.isInteractive) handler.post(tick) else saveState("Paused: screen off", 0L)
  }
  private fun readBattery(force: Boolean) {
   val now = SystemClock.elapsedRealtime()
@@ -130,6 +127,13 @@ class MonitorService : Service() {
  }
  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
   if (intent?.action == "STOP") { stopSelf(); return START_NOT_STICKY }
+  if (!monitoringStarted) {
+   monitoringStarted = true
+   startNotification()
+   getSharedPreferences("poc", MODE_PRIVATE).edit().putBoolean("monitoring", true)
+    .putLong("monitor_started_at", startedAt).putString("last_reason", "Monitoring started").apply()
+   if (power.isInteractive) handler.post(tick) else saveState("Paused: screen off", 0L)
+  }
   return START_NOT_STICKY
  }
  private fun poll() {
@@ -185,11 +189,11 @@ class MonitorService : Service() {
      .putString("last_reason", "Popup shown").apply()
    } else prefs.edit().putString("last_reason", "Overlay display failed").apply()
   }
-  Log.i("PauseBite", "Foreground=$name delay=${delay}ms result=${prefs.getString("last_reason", "")}")
+  // Do not write foreground app names to system logs; diagnostics stay in private app storage.
  }
  override fun onDestroy() {
   handler.removeCallbacks(tick)
-  if (receiverRegistered) unregisterReceiver(screenReceiver)
+  if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
   Overlay.hide()
   saveState("Monitoring stopped", 0L)
   getSharedPreferences("poc", MODE_PRIVATE).edit().putBoolean("monitoring", false)

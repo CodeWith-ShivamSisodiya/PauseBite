@@ -22,11 +22,11 @@ class MainActivity : Activity() {
   super.onCreate(savedInstanceState)
   val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32,48,32,24) }
   root.addView(TextView(this).apply { text = "PauseBite — Battery-aware monitoring v0.6"; textSize = 23f })
-  root.addView(TextView(this).apply { text = "Opt-in, local-only monitoring of Swiggy and Zomato. Popups are dismissible. Stop monitoring at any time."; textSize = 15f })
+  root.addView(TextView(this).apply { text = "PauseBite works offline. Usage Access reads app-opening events locally to detect Swiggy/Zomato; Overlay draws a dismissible reminder above those apps. No usage data is uploaded or shared. Monitoring starts only when you tap START, and STOP ends it. Android may show a persistent monitoring notification."; textSize = 15f })
   status = TextView(this).apply { textSize = 15f; setPadding(0,18,0,18) }; root.addView(status)
   fun button(title: String, action: () -> Unit) { root.addView(Button(this).apply { text = title; setOnClickListener { action() } }) }
-  button("1. Grant Usage Access") { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-  button("2. Grant Display Over Other Apps") { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
+  button("1. Grant Usage Access (app activity detection)") { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+  button("2. Grant Display Over Other Apps (reminder)") { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
   if (Build.VERSION.SDK_INT >= 33) button("3. Allow Monitoring Notification") { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),22) }
   button("START monitoring") {
    if (!usageAllowed() || !Settings.canDrawOverlays(this)) Toast.makeText(this,"Grant Usage Access and Overlay permission first",Toast.LENGTH_LONG).show()

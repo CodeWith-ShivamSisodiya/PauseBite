@@ -1,26 +1,26 @@
-# PauseBite Reliability POC v0.4
+# PauseBite v0.7 — mindful food-app reminders
 
-Android test app that detects Swiggy/Zomato foreground events after user enables Usage Access, overlay permission and starts a foreground monitoring service. The app does not request Internet access, use Accessibility Service, or transmit app usage information.
+PauseBite is an opt-in, offline Android proof of concept. It detects foreground Swiggy/Zomato activity and shows a dismissible reminder. It does not intercept orders, payment information, messages, or passwords.
 
-## Reliability changes
-- Overlapping usage-event queries and deduplication to tolerate late event publication.
-- Detect target app transitions; ignore in-app screen changes.
-- Distinguish detections, popups, snooze/cooldown suppression, and overlay failures.
-- 5-second cooldown for testing; 30-minute cooldown for normal usage.
-- On-device diagnostic counters and manual refresh.
+## Permission disclosure
 
-## Updates and signing
-Android updates require **the same application ID, a higher versionCode, and the same signing certificate**. Previous GitHub debug APKs may use different automatically generated signing keys, so an in-place update from v0.3 is **not guaranteed**. A one-time uninstall may be needed before installing a build signed with a persistent key.
+- **Usage Access (PACKAGE_USAGE_STATS):** Android provides app-activity events. PauseBite checks foreground transitions locally to detect Swiggy and Zomato. Other app events may be returned by Android's query, but PauseBite does not store a history of those apps.
+- **Display Over Other Apps (SYSTEM_ALERT_WINDOW):** draws a clearly branded, dismissible reminder on top of the food app.
+- **Foreground Service / Special Use:** runs the user-started monitoring process while the screen is on, with an ongoing notification and Stop action.
+- **Notifications (Android 13+):** allows the monitoring notification to be shown in the notification drawer. No Internet, Accessibility, SMS, Contacts, or Location permissions are requested.
 
-For reliable future in-place updates, configure GitHub Actions repository secrets:
-- `PAUSEBITE_KEYSTORE_BASE64`: base64 encoding of your private Android release keystore.
-- `PAUSEBITE_KEYSTORE_PASSWORD`
-- `PAUSEBITE_KEY_ALIAS`
-- `PAUSEBITE_KEY_PASSWORD`
+Monitoring begins only after the user grants the required access and taps START. STOP cancels monitoring and removes the overlay. Monitoring pauses while the screen is off. Local preferences hold cooldowns and aggregate diagnostics. No network upload code exists in this app.
 
-The workflow produces a persistently signed release APK **only when these secrets are configured**. Never commit a signing key or passwords to this public repository. Keep a secure backup of the key; losing it prevents updates signed with that certificate.
+## Installation and updates
 
-A debug APK remains available for basic testing but is not a dependable update channel.
+The GitHub Actions workflow requires four signing secrets: `PAUSEBITE_KEYSTORE_BASE64`, `PAUSEBITE_KEYSTORE_PASSWORD`, `PAUSEBITE_KEY_ALIAS`, `PAUSEBITE_KEY_PASSWORD`. Never commit or expose these secrets. In-place updates require the same signing certificate, application ID `com.pausebite.overlaytest`, and a higher versionCode. The workflow verifies these properties. Version 0.7 uses versionCode 7.
 
-## Security and distribution
-Google Play Protect has flagged earlier builds. This warning has **not** been resolved or explained by this code change. Do not disable Play Protect or assume an APK is safe just because GitHub Actions builds it. For Play Store release, review overlay/usage permissions, foreground-service eligibility, and app interference policies. No automatic self-update installation is implemented; Android requires user-approved installation or a store-managed update.
+## Play Protect investigation
+
+Google Play Protect flagged both the full app and a **permission-free, independently installable baseline**. This shows that the sensitive permissions are not necessary for the warning to appear, but does **not** establish the root cause or prove the app safe. The diagnostic baseline is under `diagnostic/` and is not the production app. Keep Play Protect enabled. Submit the signed APK and warning details to Google's official Play Protect developer appeal process: https://support.google.com/googleplay/android-developer/contact/protectappeals
+
+### Suggested appeal description
+
+> PauseBite is a small, offline Android application that provides an optional mindful reminder when the user opens Swiggy or Zomato. The user explicitly grants Usage Access and Display Over Other Apps, and starts or stops monitoring. It has no INTERNET, SMS, contacts, location, or Accessibility permission. We have also reproduced the same "Harmful app blocked" warning on a separate minimal APK that requests no permissions. Please review the classification and identify any actionable policy or security concern.
+
+The developer should provide the exact flagged APK, SHA-256 hash, package name, version, signing certificate fingerprint, and screenshots. Do not publish private signing keys or passwords.

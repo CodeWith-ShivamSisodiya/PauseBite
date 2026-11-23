@@ -13,7 +13,7 @@ android {
  compileSdk = 35
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
- defaultConfig { applicationId = "com.pausebite.overlaytest"; minSdk = 26; targetSdk = 35; versionCode = 6; versionName = "0.6-battery-aware" }
+ defaultConfig { applicationId = "com.pausebite.overlaytest"; minSdk = 26; targetSdk = 35; versionCode = 7; versionName = "0.7-transparency" }
  signingConfigs {
   if (!keyPath.isNullOrBlank()) create("persistent") {
    storeFile = file(keyPath)
