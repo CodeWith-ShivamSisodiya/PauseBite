@@ -71,6 +71,35 @@ jobs:
           if grep -Eq 'android.permission.(INTERNET|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES)' apk-permissions.txt; then
             echo "::error::Unexpected permission"; exit 1
           fi
+      - name: Build minimal permission-free diagnostic APK
+        run: gradle --no-daemon :diagnostic:assembleRelease
+      - name: Verify diagnostic APK identity, permissions and signature
+        shell: bash
+        run: |
+          APK=diagnostic/build/outputs/apk/release/diagnostic-release.apk
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --print-certs "$APK" | tee diagnostic-signing.txt
+          EXPECTED="$(keytool -exportcert -keystore "$PAUSEBITE_KEYSTORE_FILE" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
+          ACTUAL="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' diagnostic-signing.txt | head -n 1)"
+          test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
+          "$AAPT" dump badging "$APK" | tee diagnostic-metadata.txt
+          grep -Fq "package: name='com.pausebite.permissionbaseline' versionCode='1'" diagnostic-metadata.txt
+          "$AAPT" dump permissions "$APK" | tee diagnostic-permissions.txt
+          if grep -q 'uses-permission:' diagnostic-permissions.txt; then
+            echo "::error::Diagnostic baseline must not request permissions"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-minimal-permission-baseline
+          path: |
+            diagnostic/build/outputs/apk/release/diagnostic-release.apk
+            diagnostic-signing.txt
+            diagnostic-metadata.txt
+            diagnostic-permissions.txt
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: PauseBite-verified-update-apk
