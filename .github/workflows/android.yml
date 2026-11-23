@@ -143,6 +143,55 @@ jobs:
           ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
           test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
           echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
+      - name: Build three incremental isolation APKs
+        run: gradle --no-daemon :isolation:assembleUiOnlyRelease :isolation:assembleUiPermissionsRelease :isolation:assembleFullRelease
+      - name: Verify and sign isolation APKs with one independent test certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          TEST_KEY="$RUNNER_TEMP/isolation-test.p12"
+          TEST_PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$TEST_PASS"
+          keytool -genkeypair -noprompt -alias isolation -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Isolation Test, O=Local Diagnostic, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
+          mkdir -p isolation-apks
+          for variant in uiOnly uiPermissions full; do
+            case "$variant" in
+              uiOnly) slug=ui-only; pkg=com.pausebite.isolation.uionly; expected=0 ;;
+              uiPermissions) slug=ui-permissions; pkg=com.pausebite.isolation.uipermissions; expected=5 ;;
+              full) slug=full; pkg=com.pausebite.isolation.full; expected=5 ;;
+            esac
+            src="isolation/build/outputs/apk/$slug/release/isolation-$slug-release.apk"
+            test -f "$src"
+            dest="isolation-apks/PauseBite-$slug-isolation.apk"
+            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias isolation --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$dest" "$src"
+            "$APKSIGNER" verify --print-certs "$dest" > "isolation-apks/$slug-signature.txt"
+            "$AAPT" dump badging "$dest" > "isolation-apks/$slug-metadata.txt"
+            "$AAPT" dump permissions "$dest" > "isolation-apks/$slug-permissions.txt"
+            grep -Fq "package: name='$pkg' versionCode='1'" "isolation-apks/$slug-metadata.txt"
+            count="$(grep -c "uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
+            test "$count" -eq "$expected" || { echo "::error::$slug permissions: expected $expected, got $count"; exit 1; }
+            cert="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' "isolation-apks/$slug-signature.txt" | head -n 1)"
+            test -n "$cert"
+            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
+          done
+          cat > isolation-apks/README.txt <<'EOF'
+          TEST ONLY. Three APKs use one temporary certificate and distinct package names.
+          All compile the SAME PauseBite UI, MonitorService, and Overlay source.
+          ui-only: no permissions, no service registration.
+          ui-permissions: five permissions, no service registration.
+          full: five permissions plus registered foreground service.
+          The main PauseBite app is unchanged. Do not grant permissions or start monitoring in the diagnostic variants.
+          Keep Play Protect enabled. Install one at a time and record the warning.
+          The temporary signing key is not retained; these are not updatable production apps.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-three-stage-isolation-tests
+          path: isolation-apks/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: PauseBite-full-app-alternate-signature-TEST-ONLY

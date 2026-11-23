@@ -3,3 +3,5 @@ dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_P
 rootProject.name = "PauseBitePOC"
 include(":app")
 include(":diagnostic")
+
+include(":isolation")
