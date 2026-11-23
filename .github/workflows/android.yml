@@ -163,19 +163,21 @@ jobs:
               uiPermissions) slug=ui-permissions; pkg=com.pausebite.isolation.uipermissions; expected=5 ;;
               full) slug=full; pkg=com.pausebite.isolation.full; expected=5 ;;
             esac
-            src="isolation/build/outputs/apk/$variant/release/isolation-$variant-release.apk"
-            test -f "$src"
+            src="$(find "isolation/build/outputs/apk/$variant/release" -maxdepth 1 -name "*.apk" -type f | head -n 1)"
+            if [ -z "$src" ] || [ ! -f "$src" ]; then echo "::error::Missing APK for $variant"; find isolation/build/outputs/apk -type f; exit 1; fi
+            echo "Signing $variant: $src"
             dest="isolation-apks/PauseBite-$slug-isolation.apk"
             "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias isolation --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$dest" "$src"
             "$APKSIGNER" verify --print-certs "$dest" > "isolation-apks/$slug-signature.txt"
             "$AAPT" dump badging "$dest" > "isolation-apks/$slug-metadata.txt"
             "$AAPT" dump permissions "$dest" > "isolation-apks/$slug-permissions.txt"
-            grep -Fq "package: name='$pkg' versionCode='1'" "isolation-apks/$slug-metadata.txt"
-            count="$(grep -c "uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
+            if ! grep -Fq "package: name='$pkg' versionCode='1'" "isolation-apks/$slug-metadata.txt"; then echo "::error::$slug APK identity mismatch"; head -n 2 "isolation-apks/$slug-metadata.txt"; exit 1; fi
+            count="$(grep -c "^uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
+            echo "$slug verified permission count: $count"
             test "$count" -eq "$expected" || { echo "::error::$slug permissions: expected $expected, got $count"; exit 1; }
             cert="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' "isolation-apks/$slug-signature.txt" | head -n 1)"
-            test -n "$cert"
-            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
+            if [ -z "$cert" ]; then echo "::error::$slug certificate parsing failed"; cat "isolation-apks/$slug-signature.txt"; exit 1; fi
+            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else if [ "$reference_cert" != "$cert" ]; then echo "::error::$slug certificate mismatch"; exit 1; fi; fi
           done
           cat > isolation-apks/README.txt <<'EOF'
           TEST ONLY. Three APKs use one temporary certificate and distinct package names.
