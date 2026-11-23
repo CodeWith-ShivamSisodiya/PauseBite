@@ -143,6 +143,54 @@ jobs:
           ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
           test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
           echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
+      - name: Build controlled code-versus-permission experiment
+        run: gradle --no-daemon :cleancontrol:assembleMinimalRelease :cleancontrol:assembleOverlayRelease :isolation:assembleOnlyOverlayRelease
+      - name: Sign and verify three controlled comparison APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          TEST_KEY="$RUNNER_TEMP/code-permission-test.p12"
+          TEST_PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$TEST_PASS"
+          keytool -genkeypair -noprompt -alias comparison -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Controlled Comparison, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
+          mkdir -p controlled-comparison
+          for variant in A B C; do
+            case "$variant" in
+              A) dir=cleancontrol/build/outputs/apk/minimal/release; pkg=com.pausebite.control.minimal; expected=0; title=minimal-no-permissions ;;
+              B) dir=cleancontrol/build/outputs/apk/overlay/release; pkg=com.pausebite.control.overlay; expected=1; title=minimal-overlay-permission ;;
+              C) dir=isolation/build/outputs/apk/onlyOverlay/release; pkg=com.pausebite.isolation.onlyoverlay; expected=1; title=full-code-overlay-permission ;;
+            esac
+            src="$(find "$dir" -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+            test -n "$src" && test -f "$src"
+            out="controlled-comparison/PauseBite-$variant-$title.apk"
+            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias comparison --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$out" "$src"
+            "$APKSIGNER" verify --print-certs "$out" > "controlled-comparison/$variant-signature.txt"
+            "$AAPT" dump badging "$out" > "controlled-comparison/$variant-badging.txt"
+            "$AAPT" dump permissions "$out" > "controlled-comparison/$variant-permissions.txt"
+            grep -Fq "package: name='$pkg' versionCode='1'" "controlled-comparison/$variant-badging.txt"
+            count="$(grep -c '^uses-permission:' "controlled-comparison/$variant-permissions.txt" || true)"
+            test "$count" -eq "$expected"
+            if [ "$expected" -eq 1 ]; then grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "controlled-comparison/$variant-permissions.txt"; fi
+            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "controlled-comparison/$variant-signature.txt" | head -n 1)"
+            test -n "$cert"
+            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
+          done
+          cat > controlled-comparison/README.txt <<'EOF'
+          A: Minimal Java activity, no permissions, no monitoring/overlay code.
+          B: Same minimal Java activity, overlay permission only, no monitoring/overlay code.
+          C: Existing PauseBite Kotlin UI/monitoring/overlay code, overlay permission only, no service registration.
+          All three use one temporary certificate and separate package names. Do not grant permissions or run monitoring.
+          Keep Play Protect enabled. Record exact warning text and whether each app remains installed.
+          This experiment tests correlations; package IDs and code differ between B and C.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-controlled-code-permission-comparison
+          path: controlled-comparison/
+          if-no-files-found: error
       - name: Build isolation and five single-permission APKs
         run: gradle --no-daemon :isolation:assembleUiOnlyRelease :isolation:assembleUiPermissionsRelease :isolation:assembleFullRelease :isolation:assembleOnlyOverlayRelease :isolation:assembleOnlyUsageRelease :isolation:assembleOnlyForegroundRelease :isolation:assembleOnlySpecialUseRelease :isolation:assembleOnlyNotificationsRelease
       - name: Verify and sign isolation APKs with one independent test certificate

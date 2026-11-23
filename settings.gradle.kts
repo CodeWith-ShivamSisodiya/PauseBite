@@ -5,3 +5,5 @@ include(":app")
 include(":diagnostic")
 
 include(":isolation")
+
+include(":cleancontrol")
