@@ -120,6 +120,39 @@ jobs:
           echo "Alternate certificate SHA256: $ALTERNATE_CERT" >> diagnostic-certificate-comparison.txt
           echo "Both APKs have the same package name and version; install only one at a time." >> diagnostic-certificate-comparison.txt
           echo "Alternate signing key is ephemeral, never uploaded or reused." >> diagnostic-certificate-comparison.txt
+      - name: Build full PauseBite with alternate diagnostic certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          ORIGINAL=app/build/outputs/apk/release/app-release.apk
+          ALT=PauseBite-alternate-signature-test.apk
+          TEMP_KEYSTORE="$RUNNER_TEMP/pausebite-alternate-test.p12"
+          TEMP_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$TEMP_PASSWORD"
+          keytool -genkeypair -noprompt -alias alternate-test -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Alternate Signing Test, O=PauseBite, C=IN" -storetype PKCS12 -keystore "$TEMP_KEYSTORE" -storepass "$TEMP_PASSWORD" -keypass "$TEMP_PASSWORD" >/dev/null 2>&1
+          "$APKSIGNER" sign --ks "$TEMP_KEYSTORE" --ks-key-alias alternate-test --ks-pass "pass:$TEMP_PASSWORD" --key-pass "pass:$TEMP_PASSWORD" --out "$ALT" "$ORIGINAL"
+          "$APKSIGNER" verify --print-certs "$ALT" | tee full-alternate-signing.txt
+          "$AAPT" dump badging "$ALT" | tee full-alternate-metadata.txt
+          "$AAPT" dump permissions "$ALT" | tee full-alternate-permissions.txt
+          grep -Fq "package: name='com.pausebite.overlaytest' versionCode='7'" full-alternate-metadata.txt
+          cmp <(sort apk-permissions.txt) <(sort full-alternate-permissions.txt)
+          ORIGINAL_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' apk-signing-certificate.txt | head -n 1)"
+          ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
+          test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
+          echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-full-app-alternate-signature-TEST-ONLY
+          path: |
+            PauseBite-alternate-signature-test.apk
+            full-alternate-signing.txt
+            full-alternate-metadata.txt
+            full-alternate-permissions.txt
+            full-alternate-README.txt
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: PauseBite-baseline-alternate-certificate
