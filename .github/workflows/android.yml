@@ -163,7 +163,7 @@ jobs:
               uiPermissions) slug=ui-permissions; pkg=com.pausebite.isolation.uipermissions; expected=5 ;;
               full) slug=full; pkg=com.pausebite.isolation.full; expected=5 ;;
             esac
-            src="isolation/build/outputs/apk/$slug/release/isolation-$slug-release.apk"
+            src="isolation/build/outputs/apk/$variant/release/isolation-$variant-release.apk"
             test -f "$src"
             dest="isolation-apks/PauseBite-$slug-isolation.apk"
             "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias isolation --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$dest" "$src"
