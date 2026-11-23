@@ -91,6 +91,45 @@ jobs:
             echo "::error::Diagnostic baseline must not request permissions"
             exit 1
           fi
+      - name: Create differently signed identical baseline for controlled comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          ORIGINAL=diagnostic/build/outputs/apk/release/diagnostic-release.apk
+          ALT=diagnostic-alternate-certificate.apk
+          TEMP_KEYSTORE="$RUNNER_TEMP/diagnostic-only-alternate.p12"
+          TEMP_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$TEMP_PASSWORD"
+          keytool -genkeypair -noprompt -alias diagnostic-alternate -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Diagnostic Alternate, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEMP_KEYSTORE" -storepass "$TEMP_PASSWORD" -keypass "$TEMP_PASSWORD" >/dev/null 2>&1
+          "$APKSIGNER" sign --ks "$TEMP_KEYSTORE" --ks-key-alias diagnostic-alternate --ks-pass "pass:$TEMP_PASSWORD" --key-pass "pass:$TEMP_PASSWORD" --out "$ALT" "$ORIGINAL"
+          "$APKSIGNER" verify --print-certs "$ALT" | tee alternate-signing.txt
+          "$AAPT" dump badging "$ALT" | tee alternate-metadata.txt
+          "$AAPT" dump permissions "$ALT" | tee alternate-permissions.txt
+          grep -Fq "package: name='com.pausebite.permissionbaseline' versionCode='1'" alternate-metadata.txt
+          if grep -q 'uses-permission:' alternate-permissions.txt; then
+            echo "::error::Alternate baseline requests unexpected permissions"
+            exit 1
+          fi
+          ORIGINAL_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' diagnostic-signing.txt | head -n 1)"
+          ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' alternate-signing.txt | head -n 1)"
+          test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
+          echo "Original certificate SHA256: $ORIGINAL_CERT" > diagnostic-certificate-comparison.txt
+          echo "Alternate certificate SHA256: $ALTERNATE_CERT" >> diagnostic-certificate-comparison.txt
+          echo "Both APKs have the same package name and version; install only one at a time." >> diagnostic-certificate-comparison.txt
+          echo "Alternate signing key is ephemeral, never uploaded or reused." >> diagnostic-certificate-comparison.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-baseline-alternate-certificate
+          path: |
+            diagnostic-alternate-certificate.apk
+            alternate-signing.txt
+            alternate-metadata.txt
+            alternate-permissions.txt
+            diagnostic-certificate-comparison.txt
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: PauseBite-minimal-permission-baseline
