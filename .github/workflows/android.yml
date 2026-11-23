@@ -175,7 +175,7 @@ jobs:
             count="$(grep -c "^uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
             echo "$slug verified permission count: $count"
             test "$count" -eq "$expected" || { echo "::error::$slug permissions: expected $expected, got $count"; exit 1; }
-            cert="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' "isolation-apks/$slug-signature.txt" | head -n 1)"
+            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "isolation-apks/$slug-signature.txt" | head -n 1)"
             if [ -z "$cert" ]; then echo "::error::$slug certificate parsing failed"; cat "isolation-apks/$slug-signature.txt"; exit 1; fi
             if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else if [ "$reference_cert" != "$cert" ]; then echo "::error::$slug certificate mismatch"; exit 1; fi; fi
           done
