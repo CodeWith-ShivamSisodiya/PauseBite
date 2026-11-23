@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+concurrency:
+  group: pausebite-main
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,9 +33,28 @@ jobs:
           "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Restore signing key if configured
+        env:
+          KEYSTORE_B64: ${{ secrets.PAUSEBITE_KEYSTORE_BASE64 }}
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pausebite-release.jks"
+          echo "PAUSEBITE_KEYSTORE_FILE=$RUNNER_TEMP/pausebite-release.jks" >> "$GITHUB_ENV"
+      - name: Build persistent signed release APK
+        if: env.PAUSEBITE_KEYSTORE_FILE != ''
+        env:
+          PAUSEBITE_KEYSTORE_PASSWORD: ${{ secrets.PAUSEBITE_KEYSTORE_PASSWORD }}
+          PAUSEBITE_KEY_ALIAS: ${{ secrets.PAUSEBITE_KEY_ALIAS }}
+          PAUSEBITE_KEY_PASSWORD: ${{ secrets.PAUSEBITE_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
       - uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: PauseBite-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: env.PAUSEBITE_KEYSTORE_FILE != ''
+        with:
+          name: PauseBite-signed-update-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
