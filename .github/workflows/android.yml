@@ -75,9 +75,17 @@ jobs:
           test -s "$AAB"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee apk-signing-certificate.txt
           EXPECTED_CERT="$(keytool -exportcert -keystore "$PAUSEBITE_KEYSTORE_FILE" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
-          ACTUAL_CERT="$(sed -nE 's/^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-f]+)$/\1/p' apk-signing-certificate.txt | head -n 1)"
-          test -n "$ACTUAL_CERT"
-          test "$EXPECTED_CERT" = "$ACTUAL_CERT"
+          # apksigner labels this line differently across versions/signing schemes,
+          # for example "Signer #1 certificate..." or "V2 Signer: certificate...".
+          ACTUAL_CERT="$(awk '/Signer.*certificate SHA-256 digest:/ { print tolower($NF); exit }' apk-signing-certificate.txt)"
+          if [ -z "$ACTUAL_CERT" ]; then
+            echo "::error::Unable to read the APK signer certificate SHA-256 digest."
+            exit 1
+          fi
+          if [ "$EXPECTED_CERT" != "$ACTUAL_CERT" ]; then
+            echo "::error::The release APK was not signed by the configured upload key."
+            exit 1
+          fi
 
           "$AAPT" dump badging "$APK" | tee apk-metadata.txt
           EXPECTED_VERSION="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' app/build.gradle.kts | head -n 1)"
