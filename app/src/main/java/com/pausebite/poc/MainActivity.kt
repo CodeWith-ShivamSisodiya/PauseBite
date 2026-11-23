@@ -21,7 +21,7 @@ class MainActivity : Activity() {
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
   val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32,48,32,24) }
-  root.addView(TextView(this).apply { text = "PauseBite — Reliability POC v0.4"; textSize = 23f })
+  root.addView(TextView(this).apply { text = "PauseBite — Battery-aware monitoring v0.6"; textSize = 23f })
   root.addView(TextView(this).apply { text = "Opt-in, local-only monitoring of Swiggy and Zomato. Popups are dismissible. Stop monitoring at any time."; textSize = 15f })
   status = TextView(this).apply { textSize = 15f; setPadding(0,18,0,18) }; root.addView(status)
   fun button(title: String, action: () -> Unit) { root.addView(Button(this).apply { text = title; setOnClickListener { action() } }) }
@@ -45,7 +45,7 @@ class MainActivity : Activity() {
  private fun refresh() {
   val p = getSharedPreferences("poc",MODE_PRIVATE)
   status.text = "Usage Access: ${usageAllowed()} | Overlay: ${Settings.canDrawOverlays(this)} | Monitoring: ${p.getBoolean("monitoring",false)}"
-  if (::log.isInitialized) log.text = "Detected openings: ${p.getInt("detected_count",0)}\nPopups shown: ${p.getInt("popup_count",0)}\nLast detected: ${p.getString("last_detected","None")}\nEvent delay: ${p.getLong("delay_ms",-1)} ms\nLast result: ${p.getString("last_reason","None")}\nCooldown: ${p.getLong("cooldown_ms",5000L)/1000} seconds\nVersion: ${packageManager.getPackageInfo(packageName,0).versionName}"
+  if (::log.isInitialized) log.text = "Detected openings: ${p.getInt("detected_count",0)}\nPopups shown: ${p.getInt("popup_count",0)}\nLast detected: ${p.getString("last_detected","None")}\nEvent delay: ${p.getLong("delay_ms",-1)} ms\nLast result: ${p.getString("last_reason","None")}\nCooldown: ${p.getLong("cooldown_ms",5000L)/1000} seconds\nBattery: ${p.getInt("battery_level",-1)}% | Saver: ${p.getBoolean("power_save",false)} | Low: ${p.getBoolean("battery_low",false)}\nMonitor mode: ${p.getString("monitor_state","Starting")}\nScreen active: ${p.getBoolean("screen_active",true)} | Poll interval: ${p.getLong("poll_interval_ms",0L)} ms\nPolling cycles: ${p.getLong("poll_count",0L)} | Session started: ${java.text.DateFormat.getTimeInstance().format(java.util.Date(p.getLong("monitor_started_at",System.currentTimeMillis())))}\nBattery reading is device-wide, not app-specific.\nVersion: ${packageManager.getPackageInfo(packageName,0).versionName}"
  }
  private fun usageAllowed(): Boolean {
   val ops = getSystemService(APP_OPS_SERVICE) as AppOpsManager
