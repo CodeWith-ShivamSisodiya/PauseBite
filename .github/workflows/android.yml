@@ -143,6 +143,63 @@ jobs:
           ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
           test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
           echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
+      - name: Build code-component isolation probes D E F
+        run: gradle --no-daemon :codeprobe:assembleOverlayCodeRelease :codeprobe:assembleMonitorCodeRelease :codeprobe:assembleCombinedCodeRelease
+      - name: Verify code-component probes and sign with shared temporary certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          DEXDUMP="$(find "$SDK_ROOT/build-tools" -name dexdump -type f | sort -V | tail -n 1)"
+          test -n "$DEXDUMP"
+          TEST_KEY="$RUNNER_TEMP/component-probe.p12"
+          TEST_PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$TEST_PASS"
+          keytool -genkeypair -noprompt -alias probe -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Code Probe, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
+          mkdir -p component-probes
+          for variant in D E F; do
+            case "$variant" in
+              D) flavor=overlayCode; pkg=com.pausebite.probe.overlaycode; label=overlay-code ;;
+              E) flavor=monitorCode; pkg=com.pausebite.probe.monitorcode; label=monitor-code ;;
+              F) flavor=combinedCode; pkg=com.pausebite.probe.combinedcode; label=combined-code ;;
+            esac
+            dir="codeprobe/build/outputs/apk/$flavor/release"
+            src="$(find "$dir" -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+            test -n "$src" && test -f "$src"
+            out="component-probes/PauseBite-$variant-$label.apk"
+            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias probe --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$out" "$src"
+            "$APKSIGNER" verify --print-certs "$out" > "component-probes/$variant-signature.txt"
+            "$AAPT" dump badging "$out" > "component-probes/$variant-badging.txt"
+            "$AAPT" dump permissions "$out" > "component-probes/$variant-permissions.txt"
+            grep -Fq "package: name='$pkg' versionCode='1'" "component-probes/$variant-badging.txt"
+            test "$(grep -c '^uses-permission:' "component-probes/$variant-permissions.txt" || true)" -eq 1
+            grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "component-probes/$variant-permissions.txt"
+            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "component-probes/$variant-signature.txt" | head -n 1)"
+            test -n "$cert"
+            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
+            unzip -p "$out" classes.dex > "component-probes/$variant.dex"
+            "$DEXDUMP" -f "component-probes/$variant.dex" > "component-probes/$variant-dex-classes.txt"
+            grep -Fq 'Lcom/pausebite/poc/Overlay;' "component-probes/$variant-dex-classes.txt"
+            if [ "$variant" != D ]; then grep -Fq 'Lcom/pausebite/poc/MonitorService;' "component-probes/$variant-dex-classes.txt"; fi
+            if [ "$variant" = D ]; then ! grep -Fq 'Lcom/pausebite/poc/MonitorService;' "component-probes/$variant-dex-classes.txt"; fi
+          done
+          rm component-probes/*.dex
+          cat > component-probes/README.txt <<'EOF'
+          D: Exact production Overlay.kt; no MonitorService; overlay permission only.
+          E: Exact production MonitorService.kt plus inert Overlay stub for compilation; overlay permission only.
+          F: Exact production Overlay.kt and MonitorService.kt; overlay permission only.
+          All have identical minimal Java UI, same temporary certificate, separate package IDs.
+          No foreground service registered. No code invoked by UI. DEX class-presence checks included.
+          Install with Play Protect enabled, do not grant permissions, report exact warning text.
+          Production app and permanent signing identity unchanged.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-code-component-isolation-D-E-F
+          path: component-probes/
+          if-no-files-found: error
       - name: Build controlled code-versus-permission experiment
         run: gradle --no-daemon :cleancontrol:assembleMinimalRelease :cleancontrol:assembleOverlayRelease :isolation:assembleOnlyOverlayRelease
       - name: Sign and verify three controlled comparison APKs

@@ -7,3 +7,5 @@ include(":diagnostic")
 include(":isolation")
 
 include(":cleancontrol")
+
+include(":codeprobe")
