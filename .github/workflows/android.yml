@@ -61,7 +61,12 @@ jobs:
           ACTUAL="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' apk-signing-certificate.txt | head -n 1)"
           test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
           "$AAPT" dump badging "$APK" | tee apk-metadata.txt
-          grep -q "package: name='com.pausebite.overlaytest' versionCode='5'" apk-metadata.txt
+          # Compare against Gradle's configured version, not a stale hard-coded build number.
+          EXPECTED_VERSION="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$EXPECTED_VERSION" || { echo "::error::Unable to read Gradle versionCode"; exit 1; }
+          grep -Fq "package: name='com.pausebite.overlaytest' versionCode='$EXPECTED_VERSION'" apk-metadata.txt || {
+            echo "::error::APK package/version does not match Gradle configuration"; exit 1;
+          }
           "$AAPT" dump permissions "$APK" | tee apk-permissions.txt
           if grep -Eq 'android.permission.(INTERNET|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES)' apk-permissions.txt; then
             echo "::error::Unexpected permission"; exit 1
