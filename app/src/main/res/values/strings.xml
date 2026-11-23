@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">PauseBite</string>
+    <string name="app_description">An offline, user-controlled mindful-eating reminder for Swiggy and Zomato.</string>
+</resources>

@@ -1,11 +1,14 @@
-name: Build verified PauseBite update APK
+name: Build verified PauseBite release
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
 concurrency:
   group: pausebite-main
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -16,18 +19,23 @@ jobs:
       PAUSEBITE_KEYSTORE_PASSWORD: ${{ secrets.PAUSEBITE_KEYSTORE_PASSWORD }}
       PAUSEBITE_KEY_ALIAS: ${{ secrets.PAUSEBITE_KEY_ALIAS }}
       PAUSEBITE_KEY_PASSWORD: ${{ secrets.PAUSEBITE_KEY_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: "8.11.1"
+
       - name: Configure Android SDK
         shell: bash
         run: |
+          set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           test -n "$SDK_ROOT"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
@@ -35,322 +43,77 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
           test -n "$SDKMANAGER"
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
-          "$SDKMANAGER" --sdk_root="$SDK_ROOT" 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Require permanent signing identity
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Require persistent upload key
         shell: bash
         run: |
+          set -euo pipefail
           if [ -z "$PB_KEYSTORE_BASE64" ] || [ -z "$PAUSEBITE_KEYSTORE_PASSWORD" ] || [ -z "$PAUSEBITE_KEY_ALIAS" ] || [ -z "$PAUSEBITE_KEY_PASSWORD" ]; then
-            echo "::error::Configure all four PAUSEBITE signing secrets before distributing another APK."
+            echo "::error::Configure all four PAUSEBITE signing secrets before producing a release."
             exit 1
           fi
-          KEYSTORE_PATH="$RUNNER_TEMP/pausebite-update.p12"
+          KEYSTORE_PATH="$RUNNER_TEMP/pausebite-upload.p12"
           printf '%s' "$PB_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           keytool -list -keystore "$KEYSTORE_PATH" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" > /dev/null
           echo "PAUSEBITE_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-      - name: Build signed release APK
-        run: gradle --no-daemon :app:assembleRelease
-      - name: Verify APK and certificate
+
+      - name: Lint and build signed APK and app bundle
+        run: gradle --no-daemon :app:lintRelease :app:assembleRelease :app:bundleRelease
+
+      - name: Verify identity, signature, and minimum permissions
         shell: bash
         run: |
+          set -euo pipefail
           APK=app/build/outputs/apk/release/app-release.apk
+          AAB=app/build/outputs/bundle/release/app-release.aab
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
           AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          "$APKSIGNER" verify --print-certs "$APK" | tee apk-signing-certificate.txt
-          EXPECTED="$(keytool -exportcert -keystore "$PAUSEBITE_KEYSTORE_FILE" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
-          ACTUAL="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' apk-signing-certificate.txt | head -n 1)"
-          test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
+
+          test -s "$APK"
+          test -s "$AAB"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee apk-signing-certificate.txt
+          EXPECTED_CERT="$(keytool -exportcert -keystore "$PAUSEBITE_KEYSTORE_FILE" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
+          ACTUAL_CERT="$(sed -nE 's/^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-f]+)$/\1/p' apk-signing-certificate.txt | head -n 1)"
+          test -n "$ACTUAL_CERT"
+          test "$EXPECTED_CERT" = "$ACTUAL_CERT"
+
           "$AAPT" dump badging "$APK" | tee apk-metadata.txt
-          # Compare against Gradle's configured version, not a stale hard-coded build number.
-          EXPECTED_VERSION="$(sed -nE 's/.*(^|[;[:space:]])versionCode[[:space:]]*=[[:space:]]*([0-9]+).*/\2/p' app/build.gradle.kts | head -n 1)"
-          test -n "$EXPECTED_VERSION" || { echo "::error::Unable to read Gradle versionCode"; exit 1; }
-          grep -Fq "package: name='com.pausebite.overlaytest' versionCode='$EXPECTED_VERSION'" apk-metadata.txt || {
-            echo "::error::APK package/version does not match Gradle configuration"; exit 1;
-          }
+          EXPECTED_VERSION="$(sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$EXPECTED_VERSION"
+          grep -Fq "package: name='com.pausebite.app' versionCode='$EXPECTED_VERSION'" apk-metadata.txt
+          grep -Fq "targetSdkVersion:'36'" apk-metadata.txt
+          grep -Fq "application-icon" apk-metadata.txt
+
           "$AAPT" dump permissions "$APK" | tee apk-permissions.txt
-          if grep -Eq 'android.permission.(INTERNET|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES)' apk-permissions.txt; then
-            echo "::error::Unexpected permission"; exit 1
-          fi
-      - name: Build minimal permission-free diagnostic APK
-        run: gradle --no-daemon :diagnostic:assembleRelease
-      - name: Verify diagnostic APK identity, permissions and signature
-        shell: bash
-        run: |
-          APK=diagnostic/build/outputs/apk/release/diagnostic-release.apk
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          "$APKSIGNER" verify --print-certs "$APK" | tee diagnostic-signing.txt
-          EXPECTED="$(keytool -exportcert -keystore "$PAUSEBITE_KEYSTORE_FILE" -storepass "$PAUSEBITE_KEYSTORE_PASSWORD" -alias "$PAUSEBITE_KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
-          ACTUAL="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' diagnostic-signing.txt | head -n 1)"
-          test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
-          "$AAPT" dump badging "$APK" | tee diagnostic-metadata.txt
-          grep -Fq "package: name='com.pausebite.permissionbaseline' versionCode='1'" diagnostic-metadata.txt
-          "$AAPT" dump permissions "$APK" | tee diagnostic-permissions.txt
-          if grep -q 'uses-permission:' diagnostic-permissions.txt; then
-            echo "::error::Diagnostic baseline must not request permissions"
+          for permission in \
+            android.permission.PACKAGE_USAGE_STATS \
+            android.permission.FOREGROUND_SERVICE \
+            android.permission.FOREGROUND_SERVICE_SPECIAL_USE \
+            android.permission.POST_NOTIFICATIONS; do
+            grep -Fq "name='$permission'" apk-permissions.txt
+          done
+          if grep -Eq 'android.permission.(SYSTEM_ALERT_WINDOW|INTERNET|QUERY_ALL_PACKAGES|BIND_ACCESSIBILITY_SERVICE|READ_SMS|RECEIVE_SMS|READ_CONTACTS|ACCESS_FINE_LOCATION)' apk-permissions.txt; then
+            echo "::error::Unexpected high-risk permission in release APK"
             exit 1
           fi
-      - name: Create differently signed identical baseline for controlled comparison
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          ORIGINAL=diagnostic/build/outputs/apk/release/diagnostic-release.apk
-          ALT=diagnostic-alternate-certificate.apk
-          TEMP_KEYSTORE="$RUNNER_TEMP/diagnostic-only-alternate.p12"
-          TEMP_PASSWORD="$(openssl rand -hex 24)"
-          echo "::add-mask::$TEMP_PASSWORD"
-          keytool -genkeypair -noprompt -alias diagnostic-alternate -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Diagnostic Alternate, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEMP_KEYSTORE" -storepass "$TEMP_PASSWORD" -keypass "$TEMP_PASSWORD" >/dev/null 2>&1
-          "$APKSIGNER" sign --ks "$TEMP_KEYSTORE" --ks-key-alias diagnostic-alternate --ks-pass "pass:$TEMP_PASSWORD" --key-pass "pass:$TEMP_PASSWORD" --out "$ALT" "$ORIGINAL"
-          "$APKSIGNER" verify --print-certs "$ALT" | tee alternate-signing.txt
-          "$AAPT" dump badging "$ALT" | tee alternate-metadata.txt
-          "$AAPT" dump permissions "$ALT" | tee alternate-permissions.txt
-          grep -Fq "package: name='com.pausebite.permissionbaseline' versionCode='1'" alternate-metadata.txt
-          if grep -q 'uses-permission:' alternate-permissions.txt; then
-            echo "::error::Alternate baseline requests unexpected permissions"
-            exit 1
-          fi
-          ORIGINAL_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' diagnostic-signing.txt | head -n 1)"
-          ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' alternate-signing.txt | head -n 1)"
-          test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
-          echo "Original certificate SHA256: $ORIGINAL_CERT" > diagnostic-certificate-comparison.txt
-          echo "Alternate certificate SHA256: $ALTERNATE_CERT" >> diagnostic-certificate-comparison.txt
-          echo "Both APKs have the same package name and version; install only one at a time." >> diagnostic-certificate-comparison.txt
-          echo "Alternate signing key is ephemeral, never uploaded or reused." >> diagnostic-certificate-comparison.txt
-      - name: Build full PauseBite with alternate diagnostic certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          ORIGINAL=app/build/outputs/apk/release/app-release.apk
-          ALT=PauseBite-alternate-signature-test.apk
-          TEMP_KEYSTORE="$RUNNER_TEMP/pausebite-alternate-test.p12"
-          TEMP_PASSWORD="$(openssl rand -hex 24)"
-          echo "::add-mask::$TEMP_PASSWORD"
-          keytool -genkeypair -noprompt -alias alternate-test -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Alternate Signing Test, O=PauseBite, C=IN" -storetype PKCS12 -keystore "$TEMP_KEYSTORE" -storepass "$TEMP_PASSWORD" -keypass "$TEMP_PASSWORD" >/dev/null 2>&1
-          "$APKSIGNER" sign --ks "$TEMP_KEYSTORE" --ks-key-alias alternate-test --ks-pass "pass:$TEMP_PASSWORD" --key-pass "pass:$TEMP_PASSWORD" --out "$ALT" "$ORIGINAL"
-          "$APKSIGNER" verify --print-certs "$ALT" | tee full-alternate-signing.txt
-          "$AAPT" dump badging "$ALT" | tee full-alternate-metadata.txt
-          "$AAPT" dump permissions "$ALT" | tee full-alternate-permissions.txt
-          grep -Fq "package: name='com.pausebite.overlaytest' versionCode='7'" full-alternate-metadata.txt
-          cmp <(sort apk-permissions.txt) <(sort full-alternate-permissions.txt)
-          ORIGINAL_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' apk-signing-certificate.txt | head -n 1)"
-          ALTERNATE_CERT="$(sed -n 's/^V[0-9][0-9]* Signer: certificate SHA-256 digest: //p' full-alternate-signing.txt | head -n 1)"
-          test -n "$ORIGINAL_CERT" && test -n "$ALTERNATE_CERT" && test "$ORIGINAL_CERT" != "$ALTERNATE_CERT"
-          echo "Temporary diagnostic key; cannot receive future updates. Uninstall existing PauseBite before installing." > full-alternate-README.txt
-      - name: Build code-component isolation probes D E F
-        run: gradle --no-daemon :codeprobe:assembleOverlayCodeRelease :codeprobe:assembleMonitorCodeRelease :codeprobe:assembleCombinedCodeRelease
-      - name: Verify code-component probes and sign with shared temporary certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          DEXDUMP="$(find "$SDK_ROOT/build-tools" -name dexdump -type f | sort -V | tail -n 1)"
-          test -n "$DEXDUMP"
-          TEST_KEY="$RUNNER_TEMP/component-probe.p12"
-          TEST_PASS="$(openssl rand -hex 24)"
-          echo "::add-mask::$TEST_PASS"
-          keytool -genkeypair -noprompt -alias probe -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Code Probe, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
-          mkdir -p component-probes
-          for variant in D E F; do
-            case "$variant" in
-              D) flavor=overlayCode; pkg=com.pausebite.probe.overlaycode; label=overlay-code ;;
-              E) flavor=monitorCode; pkg=com.pausebite.probe.monitorcode; label=monitor-code ;;
-              F) flavor=combinedCode; pkg=com.pausebite.probe.combinedcode; label=combined-code ;;
-            esac
-            dir="codeprobe/build/outputs/apk/$flavor/release"
-            src="$(find "$dir" -maxdepth 1 -name '*.apk' -type f | head -n 1)"
-            test -n "$src" && test -f "$src"
-            out="component-probes/PauseBite-$variant-$label.apk"
-            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias probe --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$out" "$src"
-            "$APKSIGNER" verify --print-certs "$out" > "component-probes/$variant-signature.txt"
-            "$AAPT" dump badging "$out" > "component-probes/$variant-badging.txt"
-            "$AAPT" dump permissions "$out" > "component-probes/$variant-permissions.txt"
-            grep -Fq "package: name='$pkg' versionCode='1'" "component-probes/$variant-badging.txt"
-            test "$(grep -c '^uses-permission:' "component-probes/$variant-permissions.txt" || true)" -eq 1
-            grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "component-probes/$variant-permissions.txt"
-            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "component-probes/$variant-signature.txt" | head -n 1)"
-            test -n "$cert"
-            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
-            unzip -p "$out" classes.dex > "component-probes/$variant.dex"
-            "$DEXDUMP" -f "component-probes/$variant.dex" > "component-probes/$variant-dex-classes.txt"
-            grep -Fq 'Lcom/pausebite/poc/Overlay;' "component-probes/$variant-dex-classes.txt"
-            if [ "$variant" != D ]; then grep -Fq 'Lcom/pausebite/poc/MonitorService;' "component-probes/$variant-dex-classes.txt"; fi
-            if [ "$variant" = D ]; then ! grep -Fq 'Lcom/pausebite/poc/MonitorService;' "component-probes/$variant-dex-classes.txt"; fi
-          done
-          rm component-probes/*.dex
-          cat > component-probes/README.txt <<'EOF'
-          D: Exact production Overlay.kt; no MonitorService; overlay permission only.
-          E: Exact production MonitorService.kt plus inert Overlay stub for compilation; overlay permission only.
-          F: Exact production Overlay.kt and MonitorService.kt; overlay permission only.
-          All have identical minimal Java UI, same temporary certificate, separate package IDs.
-          No foreground service registered. No code invoked by UI. DEX class-presence checks included.
-          Install with Play Protect enabled, do not grant permissions, report exact warning text.
-          Production app and permanent signing identity unchanged.
-          EOF
+
+          sha256sum "$APK" "$AAB" | tee artifact-sha256.txt
+
       - uses: actions/upload-artifact@v4
         with:
-          name: PauseBite-code-component-isolation-D-E-F
-          path: component-probes/
-          if-no-files-found: error
-      - name: Build controlled code-versus-permission experiment
-        run: gradle --no-daemon :cleancontrol:assembleMinimalRelease :cleancontrol:assembleOverlayRelease :isolation:assembleOnlyOverlayRelease
-      - name: Sign and verify three controlled comparison APKs
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          TEST_KEY="$RUNNER_TEMP/code-permission-test.p12"
-          TEST_PASS="$(openssl rand -hex 24)"
-          echo "::add-mask::$TEST_PASS"
-          keytool -genkeypair -noprompt -alias comparison -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Controlled Comparison, O=Local Test, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
-          mkdir -p controlled-comparison
-          for variant in A B C; do
-            case "$variant" in
-              A) dir=cleancontrol/build/outputs/apk/minimal/release; pkg=com.pausebite.control.minimal; expected=0; title=minimal-no-permissions ;;
-              B) dir=cleancontrol/build/outputs/apk/overlay/release; pkg=com.pausebite.control.overlay; expected=1; title=minimal-overlay-permission ;;
-              C) dir=isolation/build/outputs/apk/onlyOverlay/release; pkg=com.pausebite.isolation.onlyoverlay; expected=1; title=full-code-overlay-permission ;;
-            esac
-            src="$(find "$dir" -maxdepth 1 -name '*.apk' -type f | head -n 1)"
-            test -n "$src" && test -f "$src"
-            out="controlled-comparison/PauseBite-$variant-$title.apk"
-            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias comparison --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$out" "$src"
-            "$APKSIGNER" verify --print-certs "$out" > "controlled-comparison/$variant-signature.txt"
-            "$AAPT" dump badging "$out" > "controlled-comparison/$variant-badging.txt"
-            "$AAPT" dump permissions "$out" > "controlled-comparison/$variant-permissions.txt"
-            grep -Fq "package: name='$pkg' versionCode='1'" "controlled-comparison/$variant-badging.txt"
-            count="$(grep -c '^uses-permission:' "controlled-comparison/$variant-permissions.txt" || true)"
-            test "$count" -eq "$expected"
-            if [ "$expected" -eq 1 ]; then grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "controlled-comparison/$variant-permissions.txt"; fi
-            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "controlled-comparison/$variant-signature.txt" | head -n 1)"
-            test -n "$cert"
-            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else test "$reference_cert" = "$cert"; fi
-          done
-          cat > controlled-comparison/README.txt <<'EOF'
-          A: Minimal Java activity, no permissions, no monitoring/overlay code.
-          B: Same minimal Java activity, overlay permission only, no monitoring/overlay code.
-          C: Existing PauseBite Kotlin UI/monitoring/overlay code, overlay permission only, no service registration.
-          All three use one temporary certificate and separate package names. Do not grant permissions or run monitoring.
-          Keep Play Protect enabled. Record exact warning text and whether each app remains installed.
-          This experiment tests correlations; package IDs and code differ between B and C.
-          EOF
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-controlled-code-permission-comparison
-          path: controlled-comparison/
-          if-no-files-found: error
-      - name: Build isolation and five single-permission APKs
-        run: gradle --no-daemon :isolation:assembleUiOnlyRelease :isolation:assembleUiPermissionsRelease :isolation:assembleFullRelease :isolation:assembleOnlyOverlayRelease :isolation:assembleOnlyUsageRelease :isolation:assembleOnlyForegroundRelease :isolation:assembleOnlySpecialUseRelease :isolation:assembleOnlyNotificationsRelease
-      - name: Verify and sign isolation APKs with one independent test certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          AAPT="$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          TEST_KEY="$RUNNER_TEMP/isolation-test.p12"
-          TEST_PASS="$(openssl rand -hex 24)"
-          echo "::add-mask::$TEST_PASS"
-          keytool -genkeypair -noprompt -alias isolation -keyalg RSA -keysize 3072 -validity 365 -dname "CN=PauseBite Isolation Test, O=Local Diagnostic, C=IN" -storetype PKCS12 -keystore "$TEST_KEY" -storepass "$TEST_PASS" -keypass "$TEST_PASS" >/dev/null 2>&1
-          mkdir -p isolation-apks
-          for variant in uiOnly uiPermissions full onlyOverlay onlyUsage onlyForeground onlySpecialUse onlyNotifications; do
-            case "$variant" in
-              uiOnly) slug=ui-only; pkg=com.pausebite.isolation.uionly; expected=0 ;;
-              uiPermissions) slug=ui-permissions; pkg=com.pausebite.isolation.uipermissions; expected=5 ;;
-              full) slug=full; pkg=com.pausebite.isolation.full; expected=5 ;;
-              onlyOverlay) slug=overlay; pkg=com.pausebite.isolation.onlyoverlay; expected=1 ;;
-              onlyUsage) slug=usage; pkg=com.pausebite.isolation.onlyusage; expected=1 ;;
-              onlyForeground) slug=foreground; pkg=com.pausebite.isolation.onlyforeground; expected=1 ;;
-              onlySpecialUse) slug=special-use; pkg=com.pausebite.isolation.onlyspecialuse; expected=1 ;;
-              onlyNotifications) slug=notifications; pkg=com.pausebite.isolation.onlynotifications; expected=1 ;;
-            esac
-            src="$(find "isolation/build/outputs/apk/$variant/release" -maxdepth 1 -name "*.apk" -type f | head -n 1)"
-            if [ -z "$src" ] || [ ! -f "$src" ]; then echo "::error::Missing APK for $variant"; find isolation/build/outputs/apk -type f; exit 1; fi
-            echo "Signing $variant: $src"
-            dest="isolation-apks/PauseBite-$slug-isolation.apk"
-            "$APKSIGNER" sign --ks "$TEST_KEY" --ks-key-alias isolation --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" --out "$dest" "$src"
-            "$APKSIGNER" verify --print-certs "$dest" > "isolation-apks/$slug-signature.txt"
-            "$AAPT" dump badging "$dest" > "isolation-apks/$slug-metadata.txt"
-            "$AAPT" dump permissions "$dest" > "isolation-apks/$slug-permissions.txt"
-            if ! grep -Fq "package: name='$pkg' versionCode='1'" "isolation-apks/$slug-metadata.txt"; then echo "::error::$slug APK identity mismatch"; head -n 2 "isolation-apks/$slug-metadata.txt"; exit 1; fi
-            count="$(grep -c "^uses-permission:" "isolation-apks/$slug-permissions.txt" || true)"
-            echo "$slug verified permission count: $count"
-            case "$variant" in
-              onlyOverlay) grep -Fq "name='android.permission.SYSTEM_ALERT_WINDOW'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
-              onlyUsage) grep -Fq "name='android.permission.PACKAGE_USAGE_STATS'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
-              onlyForeground) grep -Fq "name='android.permission.FOREGROUND_SERVICE'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
-              onlySpecialUse) grep -Fq "name='android.permission.FOREGROUND_SERVICE_SPECIAL_USE'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
-              onlyNotifications) grep -Fq "name='android.permission.POST_NOTIFICATIONS'" "isolation-apks/$slug-permissions.txt" || { echo "::error::Wrong permission in $slug"; exit 1; } ;;
-            esac
-            test "$count" -eq "$expected" || { echo "::error::$slug permissions: expected $expected, got $count"; exit 1; }
-            cert="$(sed -nE 's/^V[0-9]+(\.[0-9]+)? Signer: certificate SHA-256 digest: ([0-9a-f]+)$/\2/p' "isolation-apks/$slug-signature.txt" | head -n 1)"
-            if [ -z "$cert" ]; then echo "::error::$slug certificate parsing failed"; cat "isolation-apks/$slug-signature.txt"; exit 1; fi
-            if [ -z "${reference_cert:-}" ]; then reference_cert="$cert"; else if [ "$reference_cert" != "$cert" ]; then echo "::error::$slug certificate mismatch"; exit 1; fi; fi
-          done
-          cat > isolation-apks/README.txt <<'EOF'
-          TEST ONLY. Eight APKs use one temporary certificate and distinct package names.
-          All compile the SAME PauseBite UI, MonitorService, and Overlay source.
-          ui-only: no permissions, no service registration.
-          ui-permissions: five permissions, no service registration.
-          full: five permissions plus registered foreground service.
-          overlay, usage, foreground, special-use, notifications: each declares exactly one named permission, no service registration.
-          The main PauseBite app is unchanged. Do not grant permissions or start monitoring in the diagnostic variants.
-          Keep Play Protect enabled. Install one at a time and record the warning.
-          The temporary signing key is not retained; these are not updatable production apps.
-          EOF
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-permission-isolation-tests
-          path: isolation-apks/
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-full-app-alternate-signature-TEST-ONLY
+          name: PauseBite-Play-Internal-Testing
           path: |
-            PauseBite-alternate-signature-test.apk
-            full-alternate-signing.txt
-            full-alternate-metadata.txt
-            full-alternate-permissions.txt
-            full-alternate-README.txt
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-baseline-alternate-certificate
-          path: |
-            diagnostic-alternate-certificate.apk
-            alternate-signing.txt
-            alternate-metadata.txt
-            alternate-permissions.txt
-            diagnostic-certificate-comparison.txt
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-minimal-permission-baseline
-          path: |
-            diagnostic/build/outputs/apk/release/diagnostic-release.apk
-            diagnostic-signing.txt
-            diagnostic-metadata.txt
-            diagnostic-permissions.txt
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-verified-update-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PauseBite-signing-and-permissions
-          path: |
+            app/build/outputs/bundle/release/app-release.aab
+            artifact-sha256.txt
             apk-signing-certificate.txt
             apk-metadata.txt
             apk-permissions.txt
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PauseBite-sideload-diagnostic-APK
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

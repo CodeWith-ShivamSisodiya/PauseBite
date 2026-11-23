@@ -1,11 +1,4 @@
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
 dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
-rootProject.name = "PauseBitePOC"
+rootProject.name = "PauseBite"
 include(":app")
-include(":diagnostic")
-
-include(":isolation")
-
-include(":cleancontrol")
-
-include(":codeprobe")
