@@ -36,7 +36,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="The user explicitly starts and stops continuous on-device Swiggy and Zomato foreground-transition monitoring. It pauses while the screen is off and shows a clearly branded, dismissible mindful-eating overlay only when a selected food app opens." />
+                android:value="The user explicitly selects supported food apps and starts or stops continuous on-device foreground-transition monitoring. It pauses while the screen is off and shows a small, clearly branded, non-modal mindful-eating card only when a user-selected food app opens. Areas outside the card remain visible and touchable." />
         </service>
     </application>
 </manifest>

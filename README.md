@@ -1,26 +1,26 @@
 # PauseBite
 
-PauseBite is an opt-in, offline Android app that shows a clearly branded, dismissible mindful-eating Pause Card when the user opens Swiggy or Zomato.
+PauseBite is an opt-in, offline Android app that shows a clearly branded, dismissible mindful-eating Pause Card when the user opens a food app they explicitly selected.
 
 ## Privacy and permissions
 
-- **Usage Access (`PACKAGE_USAGE_STATS`)** is used locally to detect foreground transitions for Swiggy and Zomato. PauseBite does not store a history of other apps.
+- **Usage Access (`PACKAGE_USAGE_STATS`)** is used locally to detect foreground transitions only for supported food apps selected by the user. PauseBite ignores and does not store a history of other apps.
 - **Foreground Service / Special Use** keeps user-started monitoring active while the screen is on. The ongoing notification always includes a Stop action.
-- **Display over other apps (`SYSTEM_ALERT_WINDOW`)** shows the Pause Card only after a selected food app opens. The permission is requested through Android Settings after a prominent disclosure and can be revoked at any time.
+- **Display over other apps (`SYSTEM_ALERT_WINDOW`)** shows a small non-modal Pause Card only after a selected food app opens. It does not dim or cover the whole screen, and areas outside the card remain visible and touchable. The permission is requested through Android Settings after a prominent disclosure and can be revoked at any time.
 - **Notifications** show only the required monitoring status and its Stop action.
 - PauseBite has no Internet, Accessibility, SMS, contacts, location, or package-enumeration permission.
 
-Monitoring starts only after the user grants Usage Access, overlay access, and notifications, then taps **START**. It stops when the user taps **STOP** and pauses while the screen is off. No app-usage data is uploaded or shared.
+Monitoring starts only after the user selects at least one supported food app, grants Usage Access, overlay access, and notifications, then taps **START**. It stops from the app, the ongoing status notification, or the Pause Card itself, and pauses while the screen is off. No app-usage data is uploaded or shared.
 
 ## Overlay preview scope
 
-Version 1.1 restores a deliberately minimal `TYPE_APPLICATION_OVERLAY` experiment while retaining the production package identity, persistent release signing, offline operation, explicit disclosures, user-controlled monitoring, and minimum permission set. The preview contains one Pause Card with Continue and Dismiss-for-today actions; richer content comes later.
+Version 1.1.1 uses a deliberately minimal `TYPE_APPLICATION_OVERLAY` experiment while retaining the production package identity, persistent release signing, offline operation, explicit disclosures, user-selected targets, user-controlled monitoring, and minimum permission set. The preview contains one small Pause Card with Continue, Dismiss-for-today, and Stop-monitoring actions; richer content comes later.
 
 The original Play Protect warning was observed on the older POC after several variables changed together, so overlay permission alone was not isolated as the cause. This build is intended for controlled Play Internal Testing. See [docs/PLAY_PROTECT_REMEDIATION.md](docs/PLAY_PROTECT_REMEDIATION.md) for the historical findings and appeal procedure.
 
 ## Release path
 
-The production identity is `com.pausebite.app`, version code 9, and target API 36. The previous `com.pausebite.overlaytest` package was a POC identity and is intentionally not update-compatible.
+The production identity is `com.pausebite.app`, version code 10, and target API 36. The previous `com.pausebite.overlaytest` package was a POC identity and is intentionally not update-compatible.
 
 1. Configure `PAUSEBITE_KEYSTORE_BASE64`, `PAUSEBITE_KEYSTORE_PASSWORD`, `PAUSEBITE_KEY_ALIAS`, and `PAUSEBITE_KEY_PASSWORD` as GitHub Actions secrets. Keep this upload key permanent and backed up.
 2. Run **Build verified PauseBite release**.

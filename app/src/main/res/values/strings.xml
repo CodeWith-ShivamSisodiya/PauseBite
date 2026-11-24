@@ -1,15 +1,17 @@
 <resources>
     <string name="app_name">PauseBite</string>
-    <string name="app_description">An offline, user-controlled mindful-eating pause card for Swiggy and Zomato.</string>
+    <string name="app_description">An offline, user-controlled mindful-eating card for explicitly selected food apps.</string>
     <string name="overlay_content_description">PauseBite mindful pause shown over %1$s</string>
     <string name="overlay_brand">PB  PauseBite</string>
     <string name="overlay_close_symbol">×</string>
     <string name="overlay_close_description">Close PauseBite</string>
     <string name="overlay_heading">Before you order,\nwhat do you need?</string>
-    <string name="overlay_body">%1$s just opened. No guilt—take five seconds and make the choice intentionally.</string>
+    <string name="overlay_body">You selected %1$s for mindful reminders. Take five seconds and make the choice intentionally.</string>
+    <string name="overlay_privacy_note">PauseBite cannot see your order, screen contents, taps, or payment information. Everything stays on this device.</string>
     <string name="overlay_mood_hungry">Hungry</string>
     <string name="overlay_mood_craving">Craving</string>
     <string name="overlay_mood_stressed">Stressed</string>
     <string name="overlay_continue">Continue ordering</string>
     <string name="overlay_dismiss_today">Dismiss reminders for today</string>
+    <string name="overlay_stop_monitoring">Stop PauseBite monitoring</string>
 </resources>

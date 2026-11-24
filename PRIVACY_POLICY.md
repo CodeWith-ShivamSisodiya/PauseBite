@@ -6,9 +6,9 @@ PauseBite is developed by CodeWith-ShivamSisodiya. Questions or privacy requests
 
 ## Data accessed and purpose
 
-When the user explicitly enables Android Usage Access and starts monitoring, PauseBite reads foreground-app transition events supplied by Android. It uses those events only to detect when Swiggy or Zomato opens and to show a mindful-eating Pause Card. Android may return events for other apps, but PauseBite does not save a history of those apps.
+When the user explicitly selects supported food apps, enables Android Usage Access, and starts monitoring, PauseBite reads foreground-app transition events supplied by Android. It uses those events only to detect when a selected food app opens and to show a mindful-eating Pause Card. Android may return events for other apps, but PauseBite immediately ignores them and does not save their history.
 
-The Pause Card uses Android's Display over other apps access. It is clearly branded as PauseBite, can be closed immediately, does not imitate the underlying app, and does not read, capture, or modify that app's screen. The user can dismiss Pause Cards for the rest of the day or revoke overlay access at any time.
+The Pause Card uses Android's Display over other apps access. It is a small, non-modal window clearly branded as PauseBite. It does not dim or cover the whole screen, and areas outside it remain visible and touchable. It can be closed immediately, does not imitate the underlying app, and does not read, capture, or modify that app's screen. The user can continue, dismiss Pause Cards for the rest of the day, stop monitoring directly from the card, or revoke overlay access at any time.
 
 PauseBite stores only local preferences needed for the feature: whether monitoring is active, dismiss and cooldown times, the last supported food app detected, aggregate detection/Pause Card counts, and basic diagnostic timing. It also reads screen and battery state locally to pause or reduce monitoring.
 

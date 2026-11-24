@@ -19,8 +19,8 @@ android {
         applicationId = "com.pausebite.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.1.0-overlay-preview"
+        versionCode = 10
+        versionName = "1.1.1-transparent-card"
     }
 
     compileOptions {

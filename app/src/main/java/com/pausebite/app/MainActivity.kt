@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
@@ -23,6 +24,8 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var diagnostics: TextView
+    private lateinit var zomatoSwitch: Switch
+    private lateinit var swiggySwitch: Switch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +39,7 @@ class MainActivity : Activity() {
             textSize = 24f
         })
         root.addView(TextView(this).apply {
-            text = "PauseBite works offline. Usage Access is used locally to notice when Swiggy or Zomato opens. Display-over-other-apps access shows one clearly branded, dismissible pause card over the food app. No app-usage data is uploaded or shared. Monitoring starts only when you tap START and stops when you tap STOP."
+            text = "PauseBite works offline. You choose which food apps it may notice. Its small, clearly branded Pause Card never reads the food app and does not block the rest of the screen. No app-usage data is uploaded or shared. Monitoring starts only when you tap START and stops when you tap STOP."
             textSize = 15f
         })
 
@@ -45,6 +48,38 @@ class MainActivity : Activity() {
             setPadding(0, 18, 0, 18)
         }
         root.addView(status)
+
+        root.addView(TextView(this).apply {
+            text = "Choose apps for mindful reminders"
+            textSize = 17f
+            setPadding(0, 8, 0, 4)
+        })
+
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        zomatoSwitch = Switch(this).apply {
+            text = "Zomato"
+            isChecked = prefs.getBoolean("target_zomato", false)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("target_zomato", checked).apply()
+                if (!checked && !hasSelectedTargets()) {
+                    stopService(Intent(this@MainActivity, MonitorService::class.java))
+                }
+                refresh()
+            }
+        }
+        root.addView(zomatoSwitch)
+        swiggySwitch = Switch(this).apply {
+            text = "Swiggy"
+            isChecked = prefs.getBoolean("target_swiggy", false)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("target_swiggy", checked).apply()
+                if (!checked && !hasSelectedTargets()) {
+                    stopService(Intent(this@MainActivity, MonitorService::class.java))
+                }
+                refresh()
+            }
+        }
+        root.addView(swiggySwitch)
 
         fun button(title: String, action: () -> Unit) {
             root.addView(Button(this).apply {
@@ -64,6 +99,7 @@ class MainActivity : Activity() {
         }
         button("START monitoring") {
             when {
+                !hasSelectedTargets() -> toast("Select Zomato, Swiggy, or both first")
                 !usageAllowed() -> toast("Grant Usage Access first")
                 !overlayAllowed() -> toast("Allow PauseBite to display over other apps")
                 !notificationsAllowed() -> toast("Allow the monitoring notification first")
@@ -81,7 +117,7 @@ class MainActivity : Activity() {
             stopService(Intent(this, MonitorService::class.java))
             refresh()
         }
-        button("Test Pause Card overlay") {
+        button("Preview the transparent Pause Card") {
             if (!overlayAllowed()) {
                 toast("Allow the PauseBite overlay first")
             } else if (!notificationsAllowed()) {
@@ -95,14 +131,6 @@ class MainActivity : Activity() {
         button("Refresh diagnostics") { refresh() }
         button("Privacy policy") {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
-        }
-        button("Set 5-second test cooldown") {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putLong("cooldown_ms", 5_000L).apply()
-            refresh()
-        }
-        button("Set 30-minute normal cooldown") {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putLong("cooldown_ms", 1_800_000L).apply()
-            refresh()
         }
 
         diagnostics = TextView(this).apply {
@@ -125,7 +153,11 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        status.text = "Usage Access: ${usageAllowed()} | Overlay: ${overlayAllowed()} | Notification: ${notificationsAllowed()} | Monitoring: ${prefs.getBoolean("monitoring", false)}"
+        val selected = buildList {
+            if (prefs.getBoolean("target_zomato", false)) add("Zomato")
+            if (prefs.getBoolean("target_swiggy", false)) add("Swiggy")
+        }.ifEmpty { listOf("None") }.joinToString()
+        status.text = "Selected apps: $selected\nUsage Access: ${usageAllowed()} | Overlay: ${overlayAllowed()} | Notification: ${notificationsAllowed()} | Monitoring: ${prefs.getBoolean("monitoring", false)}"
         if (::diagnostics.isInitialized) {
             val packageInfo = packageManager.getPackageInfo(packageName, 0)
             val versionCode = if (Build.VERSION.SDK_INT >= 28) {
@@ -160,7 +192,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("How PauseBite uses app activity")
             .setMessage(
-                "While monitoring is switched on, PauseBite reads Android foreground-app transition events on this device to detect only Swiggy and Zomato. Other app events may be returned by Android, but PauseBite does not save a history of them. Detection, cooldowns, and aggregate counters stay on this device. PauseBite has no Internet permission and does not upload, sell, or share app-activity data. You can stop monitoring at any time."
+                "While monitoring is switched on, PauseBite reads Android foreground-app transition events on this device to detect only the food apps you selected. Other app events may be returned by Android, but PauseBite immediately ignores them and does not save their history. Detection, cooldowns, and aggregate counters stay on this device. PauseBite has no Internet permission and does not upload, sell, or share app-activity data. You can stop monitoring at any time."
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
@@ -173,7 +205,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("How the Pause Card works")
             .setMessage(
-                "When monitoring is on and you open a selected food-delivery app, PauseBite uses Android's Display over other apps access to place one clearly branded pause card above that app. The card does not read, capture, or modify the food app's screen. It can be closed immediately, disabled for the day, or disabled permanently by stopping monitoring or revoking this access."
+                "When monitoring is on and you open a food-delivery app that you selected, PauseBite uses Android's Display over other apps access to show one small, clearly branded card. It does not cover the whole screen; content and controls outside the card remain visible and touchable. The card cannot read, capture, or modify the food app. Close it immediately, dismiss it for today, or stop monitoring directly from the card."
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Open settings") { _, _ ->
@@ -188,6 +220,11 @@ class MainActivity : Activity() {
     }
 
     private fun overlayAllowed(): Boolean = Settings.canDrawOverlays(this)
+
+    private fun hasSelectedTargets(): Boolean {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        return prefs.getBoolean("target_zomato", false) || prefs.getBoolean("target_swiggy", false)
+    }
 
     private fun notificationsAllowed(): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

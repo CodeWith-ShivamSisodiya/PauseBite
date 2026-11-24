@@ -11,7 +11,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -21,7 +20,8 @@ class OverlayController(
 ) {
     enum class Action {
         CONTINUE,
-        DISMISS_TODAY
+        DISMISS_TODAY,
+        STOP_MONITORING
     }
 
     private val appContext = context.applicationContext
@@ -32,20 +32,14 @@ class OverlayController(
         if (!Settings.canDrawOverlays(appContext)) return false
         dismiss()
 
-        val root = FrameLayout(appContext).apply {
-            setBackgroundColor(Color.argb(178, 8, 20, 16))
-            isClickable = true
-            contentDescription = appContext.getString(R.string.overlay_content_description, source)
-            setPadding(dp(18), dp(54), dp(18), dp(24))
-        }
-
         val card = LinearLayout(appContext).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(22), dp(20), dp(22), dp(22))
-            background = rounded(Color.rgb(248, 246, 239), 28)
+            background = rounded(Color.rgb(248, 246, 239), 28, GREEN)
             elevation = dp(16).toFloat()
             isClickable = true
+            contentDescription = appContext.getString(R.string.overlay_content_description, source)
         }
 
         val top = LinearLayout(appContext).apply {
@@ -87,6 +81,13 @@ class OverlayController(
         }, matchWidth(topMargin = 10))
 
         card.addView(TextView(appContext).apply {
+            text = appContext.getString(R.string.overlay_privacy_note)
+            setTextColor(MUTED)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            gravity = Gravity.CENTER
+        }, matchWidth(topMargin = 8))
+
+        card.addView(TextView(appContext).apply {
             text = "5"
             setTextColor(GREEN)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 34f)
@@ -124,27 +125,29 @@ class OverlayController(
         card.addView(actionButton(appContext.getString(R.string.overlay_dismiss_today), primary = false) {
             finish(Action.DISMISS_TODAY)
         }, matchWidth(topMargin = 9))
+        card.addView(actionButton(appContext.getString(R.string.overlay_stop_monitoring), primary = false) {
+            finish(Action.STOP_MONITORING)
+        }, matchWidth(topMargin = 9))
 
-        root.addView(card, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.CENTER
-        ))
+        val windowWidth = (appContext.resources.displayMetrics.widthPixels - dp(32))
+            .coerceAtMost(dp(440))
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            windowWidth,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            setTitle("PauseBite mindful pause")
+            gravity = Gravity.CENTER
+            setTitle("PauseBite user-enabled mindful pause")
         }
 
         return try {
-            windowManager.addView(root, params)
-            overlayView = root
+            windowManager.addView(card, params)
+            overlayView = card
             true
         } catch (_: Exception) {
             overlayView = null

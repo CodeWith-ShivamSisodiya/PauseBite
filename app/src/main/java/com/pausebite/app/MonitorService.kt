@@ -109,6 +109,12 @@ class MonitorService : Service() {
                         .putString("last_reason", "Pause Cards dismissed until tomorrow")
                         .apply()
                 }
+                OverlayController.Action.STOP_MONITORING -> {
+                    preferences().edit()
+                        .putString("last_reason", "Monitoring stopped from Pause Card")
+                        .apply()
+                    stopSelf()
+                }
             }
         }
         createNotificationChannels()
@@ -180,7 +186,7 @@ class MonitorService : Service() {
         val notification = Notification.Builder(this, MONITOR_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("PauseBite monitoring active")
-            .setContentText("Offline monitoring; pauses while the screen is off")
+            .setContentText("Only selected food apps; offline; tap Stop anytime")
             .setContentIntent(openApp)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
@@ -236,6 +242,10 @@ class MonitorService : Service() {
         lastEventKey = newestKey
         val targetName = targets[packageName]
         if (targetName == null) {
+            lastForeground = packageName
+            return
+        }
+        if (!isTargetEnabled(packageName)) {
             lastForeground = packageName
             return
         }
@@ -303,6 +313,12 @@ class MonitorService : Service() {
     }
 
     private fun preferences() = getSharedPreferences(PREFS, MODE_PRIVATE)
+
+    private fun isTargetEnabled(packageName: String): Boolean = when (packageName) {
+        "com.application.zomato" -> preferences().getBoolean("target_zomato", false)
+        "in.swiggy.android" -> preferences().getBoolean("target_swiggy", false)
+        else -> false
+    }
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
