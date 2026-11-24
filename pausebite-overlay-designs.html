@@ -1,0 +1,387 @@
+<div id="pausebite-overlay-designs" class="viz-carousel viz-dotted-background" aria-label="PauseBite overlay design simulations">
+  <style>
+    #pausebite-overlay-designs {
+      --pbo-ink: light-dark(#18322c, #eff9f5);
+      --pbo-muted: light-dark(#65756f, #adbbb6);
+      --pbo-paper: light-dark(#f7f5ef, #16201d);
+      --pbo-surface: light-dark(#ffffff, #24312d);
+      --pbo-soft: light-dark(#e5f3ec, #294238);
+      --pbo-green: light-dark(#14765b, #57d0a4);
+      --pbo-green-ink: light-dark(#ffffff, #082218);
+      --pbo-red: light-dark(#db303f, #ff6673);
+      --pbo-line: light-dark(#d9e2de, #3b4c46);
+      --pbo-shadow: light-dark(rgba(28, 48, 41, .22), rgba(0, 0, 0, .42));
+      color: var(--pbo-ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    #pausebite-overlay-designs * { box-sizing: border-box; }
+    #pausebite-overlay-designs > section {
+      min-height: 780px;
+      padding: 12px 8px 70px;
+    }
+    #pausebite-overlay-designs .pbo-stage {
+      width: min(100%, 430px);
+      margin: 0 auto;
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+    }
+    #pausebite-overlay-designs .pbo-head {
+      width: min(100%, 332px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    #pausebite-overlay-designs .pbo-head div { min-width: 0; }
+    #pausebite-overlay-designs .pbo-head strong { display: block; font-size: 15px; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-head span { display: block; margin-top: 3px; color: var(--pbo-muted); font-size: 11px; }
+    #pausebite-overlay-designs .pbo-replay {
+      min-height: 40px;
+      border: 1px solid var(--pbo-line);
+      border-radius: 13px;
+      padding: 8px 12px;
+      background: var(--pbo-surface);
+      color: var(--pbo-ink);
+      font: inherit;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    #pausebite-overlay-designs .pbo-phone {
+      position: relative;
+      width: min(100%, 326px);
+      height: 650px;
+      overflow: hidden;
+      border: 7px solid light-dark(#26302d, #101715);
+      border-radius: 38px;
+      background: light-dark(#fafafa, #171b1a);
+      box-shadow: 0 18px 46px var(--pbo-shadow);
+    }
+    #pausebite-overlay-designs .pbo-notch {
+      position: absolute;
+      z-index: 30;
+      top: 7px;
+      left: 50%;
+      width: 104px;
+      height: 23px;
+      transform: translateX(-50%);
+      border-radius: 20px;
+      background: light-dark(#26302d, #101715);
+    }
+    #pausebite-overlay-designs .pbo-status {
+      position: absolute;
+      z-index: 29;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 43px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      color: var(--pbo-ink);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    #pausebite-overlay-designs .pbo-food-app {
+      position: absolute;
+      inset: 0;
+      padding: 48px 17px 18px;
+      background: light-dark(#fafafa, #171b1a);
+      transition: transform .45s ease, filter .45s ease;
+    }
+    #pausebite-overlay-designs .pbo-food-head {
+      margin: -4px -17px 0;
+      padding: 12px 17px 16px;
+      background: var(--pbo-surface);
+      box-shadow: 0 3px 12px var(--pbo-shadow);
+    }
+    #pausebite-overlay-designs .pbo-logo { color: var(--pbo-red); font-size: 20px; font-weight: 500; letter-spacing: .03em; }
+    #pausebite-overlay-designs .pbo-location { margin-top: 5px; color: var(--pbo-muted); font-size: 10px; }
+    #pausebite-overlay-designs .pbo-search { margin-top: 11px; padding: 11px 12px; border-radius: 12px; background: var(--pbo-paper); color: var(--pbo-muted); font-size: 11px; }
+    #pausebite-overlay-designs .pbo-chips { display: flex; gap: 7px; margin-top: 15px; }
+    #pausebite-overlay-designs .pbo-chip { padding: 7px 9px; border-radius: 10px; background: var(--pbo-surface); color: var(--pbo-muted); font-size: 10px; box-shadow: 0 3px 10px var(--pbo-shadow); }
+    #pausebite-overlay-designs .pbo-food-title { margin: 20px 0 10px; font-size: 16px; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-food-card { overflow: hidden; margin-top: 11px; border-radius: 16px; background: var(--pbo-surface); box-shadow: 0 6px 18px var(--pbo-shadow); }
+    #pausebite-overlay-designs .pbo-food-photo { height: 112px; display: grid; place-items: center; background: linear-gradient(135deg, light-dark(#f6d39a, #604524), light-dark(#ee9d70, #70372c)); font-size: 49px; }
+    #pausebite-overlay-designs .pbo-food-info { padding: 11px 12px; }
+    #pausebite-overlay-designs .pbo-food-info strong { display: block; font-size: 13px; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-food-info span { display: block; margin-top: 3px; color: var(--pbo-muted); font-size: 10px; }
+    #pausebite-overlay-designs .pbo-toast {
+      position: absolute;
+      z-index: 25;
+      top: 54px;
+      left: 50%;
+      width: max-content;
+      max-width: calc(100% - 34px);
+      transform: translate(-50%, -16px);
+      padding: 10px 13px;
+      border-radius: 13px;
+      background: var(--pbo-green);
+      color: var(--pbo-green-ink);
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity .3s ease, transform .3s ease;
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-done .pbo-toast { opacity: 1; transform: translate(-50%, 0); }
+    #pausebite-overlay-designs .pbo-scrim {
+      position: absolute;
+      z-index: 10;
+      inset: 0;
+      background: light-dark(rgba(16, 30, 25, .58), rgba(3, 8, 6, .68));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .45s ease;
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-overlay .pbo-scrim,
+    #pausebite-overlay-designs .pbo-demo.pbo-expanded .pbo-scrim { opacity: 1; pointer-events: auto; }
+    #pausebite-overlay-designs .pbo-overlay-card {
+      background: var(--pbo-paper);
+      color: var(--pbo-ink);
+      box-shadow: 0 18px 50px var(--pbo-shadow);
+    }
+    #pausebite-overlay-designs .pbo-brand { display: flex; align-items: center; gap: 8px; color: var(--pbo-green); font-size: 13px; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-mark { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 10px; background: var(--pbo-green); color: var(--pbo-green-ink); font-size: 11px; }
+    #pausebite-overlay-designs .pbo-close { border: 0; background: transparent; color: var(--pbo-muted); font: inherit; font-size: 20px; padding: 7px; }
+    #pausebite-overlay-designs .pbo-card-top { display: flex; align-items: center; justify-content: space-between; }
+    #pausebite-overlay-designs .pbo-question { margin: 24px 0 0; font-size: 27px; line-height: 1.1; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-copy { margin: 9px 0 0; color: var(--pbo-muted); font-size: 12px; line-height: 1.45; }
+    #pausebite-overlay-designs .pbo-moods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 20px; }
+    #pausebite-overlay-designs .pbo-mood { min-height: 63px; border: 1px solid var(--pbo-line); border-radius: 14px; padding: 8px 4px; background: var(--pbo-surface); color: var(--pbo-ink); font: inherit; font-size: 10px; }
+    #pausebite-overlay-designs .pbo-mood b { display: block; margin-bottom: 4px; font-size: 20px; font-weight: 400; }
+    #pausebite-overlay-designs .pbo-primary,
+    #pausebite-overlay-designs .pbo-secondary { width: 100%; min-height: 47px; border-radius: 14px; font: inherit; font-size: 12px; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-primary { margin-top: 17px; border: 0; background: var(--pbo-green); color: var(--pbo-green-ink); }
+    #pausebite-overlay-designs .pbo-secondary { margin-top: 8px; border: 1px solid var(--pbo-line); background: transparent; color: var(--pbo-muted); }
+    #pausebite-overlay-designs .pbo-full-card {
+      position: absolute;
+      z-index: 12;
+      inset: 46px 12px 15px;
+      padding: 18px;
+      border-radius: 28px;
+      opacity: 0;
+      transform: translateY(28px) scale(.96);
+      pointer-events: none;
+      transition: opacity .45s ease, transform .45s ease;
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-overlay .pbo-full-card { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+    #pausebite-overlay-designs .pbo-pause-orb { width: 98px; height: 98px; display: grid; place-items: center; margin: 23px auto 4px; border-radius: 50%; background: var(--pbo-soft); color: var(--pbo-green); font-size: 36px; box-shadow: 0 0 0 9px light-dark(rgba(20,118,91,.08), rgba(87,208,164,.08)); animation: pbo-breathe 2.7s ease-in-out infinite; }
+    @keyframes pbo-breathe { 0%,100% { transform: scale(.94); } 50% { transform: scale(1.04); } }
+    #pausebite-overlay-designs .pbo-bottom-sheet {
+      position: absolute;
+      z-index: 12;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-height: 395px;
+      padding: 10px 20px 20px;
+      border-radius: 27px 27px 0 0;
+      transform: translateY(105%);
+      pointer-events: none;
+      transition: transform .5s cubic-bezier(.2,.8,.2,1);
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-overlay .pbo-bottom-sheet { transform: translateY(0); pointer-events: auto; }
+    #pausebite-overlay-designs .pbo-handle { width: 42px; height: 4px; margin: 0 auto 13px; border-radius: 4px; background: var(--pbo-line); }
+    #pausebite-overlay-designs .pbo-sheet-question { margin: 20px 0 0; font-size: 23px; line-height: 1.12; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-quick-row { display: flex; gap: 8px; margin-top: 17px; }
+    #pausebite-overlay-designs .pbo-quick { flex: 1; min-height: 58px; border: 1px solid var(--pbo-line); border-radius: 14px; background: var(--pbo-surface); color: var(--pbo-ink); font: inherit; font-size: 10px; }
+    #pausebite-overlay-designs .pbo-bubble {
+      position: absolute;
+      z-index: 14;
+      right: 13px;
+      top: 260px;
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: var(--pbo-green);
+      color: var(--pbo-green-ink);
+      box-shadow: 0 10px 25px var(--pbo-shadow);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateX(80px) scale(.7);
+      pointer-events: none;
+      transition: opacity .4s ease, transform .5s cubic-bezier(.2,.8,.2,1);
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-overlay .pbo-bubble,
+    #pausebite-overlay-designs .pbo-demo.pbo-expanded .pbo-bubble { opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
+    #pausebite-overlay-designs .pbo-coach-card {
+      position: absolute;
+      z-index: 15;
+      top: 178px;
+      right: 14px;
+      width: 260px;
+      padding: 16px;
+      border-radius: 22px;
+      opacity: 0;
+      transform: translateX(16px) scale(.9);
+      transform-origin: right center;
+      pointer-events: none;
+      transition: opacity .38s ease, transform .38s ease;
+    }
+    #pausebite-overlay-designs .pbo-demo.pbo-expanded .pbo-coach-card { opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
+    #pausebite-overlay-designs .pbo-demo.pbo-expanded .pbo-bubble { opacity: 0; pointer-events: none; }
+    #pausebite-overlay-designs .pbo-coach-card h2 { margin: 16px 0 0; font-size: 20px; line-height: 1.15; font-weight: 500; }
+    #pausebite-overlay-designs .pbo-coach-card p { margin: 7px 0 0; color: var(--pbo-muted); font-size: 11px; line-height: 1.4; }
+    #pausebite-overlay-designs .pbo-mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 14px; }
+    #pausebite-overlay-designs .pbo-mini-actions button { min-height: 43px; border-radius: 12px; font: inherit; font-size: 10px; }
+    #pausebite-overlay-designs .pbo-mini-pause { border: 0; background: var(--pbo-green); color: var(--pbo-green-ink); }
+    #pausebite-overlay-designs .pbo-mini-continue { border: 1px solid var(--pbo-line); background: transparent; color: var(--pbo-muted); }
+    #pausebite-overlay-designs .pbo-footnote { min-height: 34px; width: min(100%, 332px); color: var(--pbo-muted); font-size: 11px; line-height: 1.4; text-align: center; }
+    @media (max-width: 380px) {
+      #pausebite-overlay-designs > section { min-height: 742px; padding-left: 3px; padding-right: 3px; }
+      #pausebite-overlay-designs .pbo-phone { height: 616px; border-radius: 32px; }
+      #pausebite-overlay-designs .pbo-question { font-size: 24px; }
+      #pausebite-overlay-designs .pbo-full-card { left: 8px; right: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #pausebite-overlay-designs *, #pausebite-overlay-designs *::before, #pausebite-overlay-designs *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+
+  <section data-variant="Full Pause Card" aria-label="Full screen PauseBite overlay simulation">
+    <div class="pbo-stage">
+      <div class="pbo-head"><div><strong>Automatic full intervention</strong><span>Zomato opens normally; PauseBite takes focus.</span></div><button class="pbo-replay" type="button">↻ Replay</button></div>
+      <div class="pbo-phone pbo-demo" data-kind="full" aria-live="polite">
+        <div class="pbo-notch" aria-hidden="true"></div><div class="pbo-status"><span>8:42</span><span>5G&nbsp;&nbsp;86%</span></div>
+        <div class="pbo-food-app">
+          <div class="pbo-food-head"><div class="pbo-logo">ZOMATO</div><div class="pbo-location">Home • New Delhi</div><div class="pbo-search">Search for restaurant or dish</div></div>
+          <div class="pbo-chips"><span class="pbo-chip">Fast delivery</span><span class="pbo-chip">Offers</span><span class="pbo-chip">Healthy</span></div>
+          <h3 class="pbo-food-title">Recommended for you</h3>
+          <div class="pbo-food-card"><div class="pbo-food-photo">🍔</div><div class="pbo-food-info"><strong>Big Bite Burgers</strong><span>25–30 min • ₹430 for one</span></div></div>
+        </div>
+        <div class="pbo-toast">Pause complete — your choice is intentional.</div>
+        <div class="pbo-scrim"></div>
+        <div class="pbo-overlay-card pbo-full-card">
+          <div class="pbo-card-top"><div class="pbo-brand"><span class="pbo-mark">PB</span>PauseBite</div><button class="pbo-close pbo-dismiss" type="button" aria-label="Dismiss overlay">×</button></div>
+          <h2 class="pbo-question">Before you order,<br>what do you need?</h2>
+          <p class="pbo-copy">No guilt. Just a five-second check with yourself.</p>
+          <div class="pbo-pause-orb">5</div>
+          <div class="pbo-moods"><button class="pbo-mood" type="button"><b>🍽</b>Hungry</button><button class="pbo-mood" type="button"><b>🍟</b>Craving</button><button class="pbo-mood" type="button"><b>☁</b>Stressed</button></div>
+          <button class="pbo-primary" type="button">Show a healthier alternative</button>
+          <button class="pbo-secondary pbo-continue" type="button">Continue ordering</button>
+        </div>
+      </div>
+      <div class="pbo-footnote">Strongest interruption and closest to the original PauseBite concept.</div>
+    </div>
+  </section>
+
+  <section data-variant="Bottom Sheet" aria-label="Bottom sheet PauseBite overlay simulation" hidden>
+    <div class="pbo-stage">
+      <div class="pbo-head"><div><strong>Automatic bottom sheet</strong><span>Visible immediately while preserving app context.</span></div><button class="pbo-replay" type="button">↻ Replay</button></div>
+      <div class="pbo-phone pbo-demo" data-kind="sheet" aria-live="polite">
+        <div class="pbo-notch" aria-hidden="true"></div><div class="pbo-status"><span>8:42</span><span>5G&nbsp;&nbsp;86%</span></div>
+        <div class="pbo-food-app">
+          <div class="pbo-food-head"><div class="pbo-logo">ZOMATO</div><div class="pbo-location">Home • New Delhi</div><div class="pbo-search">Search for restaurant or dish</div></div>
+          <div class="pbo-chips"><span class="pbo-chip">Fast delivery</span><span class="pbo-chip">Offers</span><span class="pbo-chip">Healthy</span></div>
+          <h3 class="pbo-food-title">Recommended for you</h3>
+          <div class="pbo-food-card"><div class="pbo-food-photo">🍕</div><div class="pbo-food-info"><strong>Oven Story Pizza</strong><span>30–35 min • ₹520 for one</span></div></div>
+        </div>
+        <div class="pbo-toast">Pause complete — continue when ready.</div>
+        <div class="pbo-scrim"></div>
+        <div class="pbo-overlay-card pbo-bottom-sheet">
+          <div class="pbo-handle"></div>
+          <div class="pbo-card-top"><div class="pbo-brand"><span class="pbo-mark">PB</span>PauseBite</div><button class="pbo-close pbo-dismiss" type="button" aria-label="Dismiss overlay">×</button></div>
+          <h2 class="pbo-sheet-question">Tiny pause before the menu?</h2>
+          <p class="pbo-copy">You opened this app twice today. What would help right now?</p>
+          <div class="pbo-quick-row"><button class="pbo-quick" type="button">💧<br>Water first</button><button class="pbo-quick" type="button">🥪<br>Quick snack</button><button class="pbo-quick" type="button">⏱<br>Wait 10 min</button></div>
+          <button class="pbo-primary" type="button">Help me reconsider</button>
+          <button class="pbo-secondary pbo-continue" type="button">I'm sure — continue</button>
+        </div>
+      </div>
+      <div class="pbo-footnote">Balanced: difficult to miss, but less confrontational than full screen.</div>
+    </div>
+  </section>
+
+  <section data-variant="Floating Coach" aria-label="Floating PauseBite coach overlay simulation" hidden>
+    <div class="pbo-stage">
+      <div class="pbo-head"><div><strong>Playful floating coach</strong><span>A mascot enters, then expands when tapped.</span></div><button class="pbo-replay" type="button">↻ Replay</button></div>
+      <div class="pbo-phone pbo-demo" data-kind="bubble" aria-live="polite">
+        <div class="pbo-notch" aria-hidden="true"></div><div class="pbo-status"><span>8:42</span><span>5G&nbsp;&nbsp;86%</span></div>
+        <div class="pbo-food-app">
+          <div class="pbo-food-head"><div class="pbo-logo">ZOMATO</div><div class="pbo-location">Home • New Delhi</div><div class="pbo-search">Search for restaurant or dish</div></div>
+          <div class="pbo-chips"><span class="pbo-chip">Fast delivery</span><span class="pbo-chip">Offers</span><span class="pbo-chip">Healthy</span></div>
+          <h3 class="pbo-food-title">Recommended for you</h3>
+          <div class="pbo-food-card"><div class="pbo-food-photo">🍜</div><div class="pbo-food-info"><strong>Wok This Way</strong><span>20–25 min • ₹380 for one</span></div></div>
+        </div>
+        <div class="pbo-toast">Nice — you chose consciously.</div>
+        <button class="pbo-bubble" type="button" aria-label="Open PauseBite coach">PB</button>
+        <div class="pbo-overlay-card pbo-coach-card">
+          <div class="pbo-card-top"><div class="pbo-brand"><span class="pbo-mark">PB</span>PauseBite</div><button class="pbo-close pbo-dismiss" type="button" aria-label="Close coach">×</button></div>
+          <h2>Hey, third visit today 👀</h2>
+          <p>Hungry—or did your thumb arrive here before your brain?</p>
+          <div class="pbo-mini-actions"><button class="pbo-mini-pause" type="button">Pause 10 min</button><button class="pbo-mini-continue pbo-continue" type="button">Continue</button></div>
+        </div>
+      </div>
+      <div class="pbo-footnote">Most delightful and least disruptive, but also easiest to ignore.</div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('pausebite-overlay-designs');
+      const demos = [...root.querySelectorAll('.pbo-demo')];
+      const timers = new WeakMap();
+
+      function clearDemoTimers(demo) {
+        (timers.get(demo) || []).forEach(clearTimeout);
+        timers.set(demo, []);
+      }
+      function later(demo, fn, delay) {
+        const id = setTimeout(fn, delay);
+        const list = timers.get(demo) || [];
+        list.push(id);
+        timers.set(demo, list);
+      }
+      function save(kind, outcome) {
+        if (window.openai?.setWidgetState) {
+          window.openai.setWidgetState({ modelContent: { overlayDesign: kind, outcome }, privateContent: null }).catch(() => {});
+        }
+      }
+      function replay(demo) {
+        clearDemoTimers(demo);
+        demo.classList.remove('pbo-overlay', 'pbo-expanded', 'pbo-done');
+        const orb = demo.querySelector('.pbo-pause-orb');
+        if (orb) orb.textContent = '5';
+        later(demo, () => demo.classList.add('pbo-overlay'), 900);
+        if (demo.dataset.kind === 'full' && orb) {
+          later(demo, () => orb.textContent = '4', 1800);
+          later(demo, () => orb.textContent = '3', 2700);
+          later(demo, () => orb.textContent = '2', 3600);
+          later(demo, () => orb.textContent = '1', 4500);
+        }
+        if (demo.dataset.kind === 'bubble') {
+          later(demo, () => {
+            demo.classList.remove('pbo-overlay');
+            demo.classList.add('pbo-expanded');
+          }, 2450);
+        }
+      }
+      function finish(demo, outcome) {
+        clearDemoTimers(demo);
+        demo.classList.remove('pbo-overlay', 'pbo-expanded');
+        demo.classList.add('pbo-done');
+        save(demo.dataset.kind, outcome);
+        later(demo, () => demo.classList.remove('pbo-done'), 2300);
+      }
+
+      root.querySelectorAll('.pbo-replay').forEach(button => button.addEventListener('click', () => replay(button.closest('section').querySelector('.pbo-demo'))));
+      root.querySelectorAll('.pbo-continue').forEach(button => button.addEventListener('click', () => finish(button.closest('.pbo-demo'), 'continued')));
+      root.querySelectorAll('.pbo-dismiss').forEach(button => button.addEventListener('click', () => finish(button.closest('.pbo-demo'), 'dismissed')));
+      root.querySelectorAll('.pbo-bubble').forEach(button => button.addEventListener('click', () => {
+        const demo = button.closest('.pbo-demo');
+        clearDemoTimers(demo);
+        demo.classList.remove('pbo-overlay');
+        demo.classList.add('pbo-expanded');
+        save('bubble', 'expanded');
+      }));
+      root.querySelectorAll('.pbo-primary, .pbo-mood, .pbo-quick, .pbo-mini-pause').forEach(button => button.addEventListener('click', () => finish(button.closest('.pbo-demo'), 'paused')));
+
+      replay(demos[0]);
+    })();
+  </script>
+</div>
